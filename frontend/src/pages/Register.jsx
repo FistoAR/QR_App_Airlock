@@ -7,6 +7,7 @@ import { toast } from '../components/UI/Toast';
 
 import { FiUser, FiMail, FiLock, FiEye, FiEyeOff } from 'react-icons/fi';
 import { useAuthStore } from '../store/authStore';
+import qrimg from "../assets/wd.png";
 
 const registerSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -47,18 +48,7 @@ const Register = () => {
       <div className="hidden lg:flex flex-1 items-center justify-center p-[3vw]" style={{ backgroundImage: 'linear-gradient(135deg, #2563eb 0%, #1e3a8a 100%)' }}>
         <div className="text-center text-white max-w-[30vw]">
           <div className="w-[15vw] h-[15vw] mx-auto mb-[2vw] bg-white/10 rounded-[1vw] flex items-center justify-center">
-            <svg viewBox="0 0 100 100" className="w-[10vw] h-[10vw]">
-              <rect x="10" y="10" width="80" height="80" fill="white" rx="8"/>
-              <rect x="20" y="20" width="15" height="15" fill="#1e40af"/>
-              <rect x="42.5" y="20" width="15" height="15" fill="#1e40af"/>
-              <rect x="65" y="20" width="15" height="15" fill="#1e40af"/>
-              <rect x="20" y="42.5" width="15" height="15" fill="#1e40af"/>
-              <rect x="42.5" y="42.5" width="15" height="15" fill="#1e40af"/>
-              <rect x="65" y="42.5" width="15" height="15" fill="#1e40af"/>
-              <rect x="20" y="65" width="15" height="15" fill="#1e40af"/>
-              <rect x="42.5" y="65" width="15" height="15" fill="#1e40af"/>
-              <rect x="65" y="65" width="15" height="15" fill="#1e40af"/>
-            </svg>
+            <img src={qrimg} alt="QR Code" className="w-[12vw] h-[12vw] object-contain rounded-[0.5vw]" />
           </div>
           <h2 className="text-[1.75vw] font-bold mb-[0.75vw]">Start Creating Today</h2>
           <p className="text-[0.95vw] text-white/80">
@@ -71,14 +61,6 @@ const Register = () => {
       {/* Right Side - Form */}
       <div className="flex-1 flex items-center justify-center p-[3vw]">
         <div className="w-full max-w-[25vw]">
-          {/* Logo */}
-          <div className="flex items-center gap-[0.75vw] mb-[2vw]">
-            <div className="w-[3vw] h-[3vw] rounded-[0.5vw] flex items-center justify-center" style={{ backgroundColor: '#2563eb' }}>
-              <span className="text-white text-[1.25vw] font-bold">QR</span>
-            </div>
-            <span className="text-[1.25vw] font-bold text-slate-800">QR Generator</span>
-          </div>
-
           <h1 className="text-[1.75vw] font-bold text-slate-800 mb-[0.5vw]">Create an account</h1>
           <p className="text-[0.9vw] text-slate-500 mb-[2vw]">
             Get started with your free account

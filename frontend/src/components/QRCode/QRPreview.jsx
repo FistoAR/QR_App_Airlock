@@ -102,7 +102,15 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
     height: 1000,
     type: 'svg',
     data: previewData,
-    image: logo?.url || '',
+    image: logo?.url ? (
+      logo.url.startsWith('data:') 
+        ? logo.url 
+        : `${import.meta.env.VITE_API_URL || 'http://localhost:4001/api'}/content/proxy?url=${encodeURIComponent(
+            logo.url.startsWith('http') 
+              ? logo.url 
+              : `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:4001'}${logo.url}`
+          )}`
+    ) : '',
     dotsOptions: {
       color: foregroundColor,
       type: getDotType(dotStyle)
@@ -134,11 +142,15 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
   useEffect(() => {
     if (!qrRef.current) return;
 
-    if (!qrCode.current) {
-      qrCode.current = new QRCodeStyling(options);
-      qrCode.current.append(qrRef.current);
-    } else {
-      qrCode.current.update(options);
+    try {
+      if (!qrCode.current) {
+        qrCode.current = new QRCodeStyling(options);
+        qrCode.current.append(qrRef.current);
+      } else {
+        qrCode.current.update(options);
+      }
+    } catch (err) {
+      console.error('QR code styling error:', err);
     }
   }, [options]); // Initial render and update when options change
 
@@ -150,7 +162,7 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
       const svg = qrRef.current?.querySelector('svg');
       const img = svg?.querySelector('image');
       
-      if (img) {
+      if (img && logo?.url) {
         img.setAttribute('preserveAspectRatio', 'xMidYMid meet');
         
         if (logo?.backgroundColor || logo?.borderColor) {
@@ -188,6 +200,8 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
         } else {
           svg.querySelector('#logo-preview-bg')?.remove();
         }
+      } else {
+        svg?.querySelector('#logo-preview-bg')?.remove();
       }
     };
 

@@ -130,20 +130,27 @@ const ToastItem = ({ toast: t, onRemove }) => {
 export const ToastProvider = ({ children }) => {
   const [toasts, setToasts] = useState([]);
 
+  const removeToast = useCallback((id) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
   const addToast = useCallback((options) => {
-    const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const id = options.id || `toast-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const duration = options.duration ?? 4000;
-    setToasts(prev => [...prev, { id, duration, ...options }]);
+    
+    setToasts(prev => {
+      const exists = prev.some(t => t.id === id);
+      if (exists) {
+        return prev.map(t => t.id === id ? { ...t, ...options, id } : t);
+      }
+      return [...prev, { id, duration, ...options }];
+    });
 
     if (duration > 0) {
       setTimeout(() => removeToast(id), duration + 300);
     }
     return id;
-  }, []);
-
-  const removeToast = useCallback((id) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  }, []);
+  }, [removeToast]);
 
   // Wire up the static toast helper
   useEffect(() => {

@@ -150,7 +150,7 @@ const FileUploadForm = ({ type }) => {
           {fileData.fileType === 'image' && fileData.mimeType !== 'image/gif' && (
             <div className="bg-slate-100 p-[1vw] flex justify-center">
               <img
-                src={fileData.url}
+                src={fileData.url?.startsWith('http') || fileData.url?.startsWith('data:') ? fileData.url : `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:4001'}${fileData.url}`}
                 alt={fileData.fileName}
                 className="max-h-[15vw] rounded-[0.3vw] object-contain"
               />
@@ -160,7 +160,7 @@ const FileUploadForm = ({ type }) => {
           {fileData.fileType === 'video' && (
             <div className="bg-slate-900 p-[0.5vw]">
               <video
-                src={fileData.url}
+                src={fileData.url?.startsWith('http') ? fileData.url : `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:4001'}${fileData.url}`}
                 controls
                 className="w-full max-h-[15vw] rounded-[0.3vw]"
               />

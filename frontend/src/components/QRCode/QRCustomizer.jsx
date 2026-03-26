@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { HexColorPicker, HexColorInput } from 'react-colorful';
 import { useDropzone } from 'react-dropzone';
-import { FiUpload, FiX, FiCheck, FiImage, FiTarget } from 'react-icons/fi';
+import { FiUpload, FiX, FiCheck, FiImage, FiTarget, FiMinus, FiPlus } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 import { contentAPI } from '../../services/api';
 import { toast } from '../../components/UI/Toast';
@@ -55,6 +55,95 @@ const frameStyles = [
   { id: 'rounded', label: 'Rounded' },
   { id: 'banner', label: 'Banner' },
 ];
+
+// Color Picker Component moved outside to prevent re-creation and fix "not smooth" dragging
+const ColorPickerPopover = ({ 
+  colorKey, label, nested = false, parentKey = '', 
+  customization, activeColorPicker, setActiveColorPicker, 
+  updateCustomization, updateNestedCustomization, pickerRef 
+}) => {
+  const currentColor = nested 
+    ? customization[parentKey]?.[colorKey] 
+    : customization[colorKey];
+  const isActive = activeColorPicker === `${parentKey}-${colorKey}`;
+
+  return (
+    <div className="relative">
+      <label className="block text-[0.75vw] font-medium text-slate-600 mb-[0.3vw]">
+        {label}
+      </label>
+      <div className="flex items-center gap-[0.5vw]">
+        <button
+          type="button"
+          data-picker-toggle={colorKey}
+          onClick={() => setActiveColorPicker(isActive ? null : `${parentKey}-${colorKey}`)}
+          className="w-[2.5vw] h-[2.5vw] rounded-[0.3vw] border-2 border-slate-200 shadow-sm cursor-pointer hover:border-slate-300 transition-colors"
+          style={{ backgroundColor: currentColor }}
+        />
+        <input
+          type="text"
+          value={currentColor}
+          onChange={(e) => {
+            if (nested) {
+              updateNestedCustomization(parentKey, colorKey, e.target.value);
+            } else {
+              updateCustomization(colorKey, e.target.value);
+            }
+          }}
+          className="flex-1 px-[0.5vw] py-[0.4vw] text-[0.8vw] border border-slate-200 rounded-[0.3vw] uppercase"
+        />
+      </div>
+      
+      <AnimatePresence>
+        {isActive && (
+          <motion.div
+            ref={pickerRef}
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="absolute z-50 mt-[0.5vw] p-[0.75vw] bg-white rounded-[0.5vw] shadow-xl border border-slate-200"
+          >
+            <HexColorPicker
+              color={currentColor}
+              onChange={(color) => {
+                if (nested) {
+                  updateNestedCustomization(parentKey, colorKey, color);
+                } else {
+                  updateCustomization(colorKey, color);
+                }
+              }}
+              style={{ width: '12vw', height: '10vw' }}
+            />
+            <div className="mt-[0.5vw] flex items-center justify-between">
+              <HexColorInput
+                color={currentColor}
+                onChange={(color) => {
+                  if (nested) {
+                    updateNestedCustomization(parentKey, colorKey, color);
+                  } else {
+                    updateCustomization(colorKey, color);
+                  }
+                }}
+                className="w-full px-[0.5vw] py-[0.3vw] text-[0.75vw] border border-slate-200 rounded-[0.3vw] uppercase"
+                prefixed
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveColorPicker(null)}
+              className="w-full mt-[0.5vw] px-[0.5vw] py-[0.3vw] text-white text-[0.75vw] rounded-[0.3vw] transition-colors"
+              style={{ backgroundColor: '#2563eb' }}
+              onMouseEnter={(e) => e.target.style.backgroundColor = '#1d4ed8'}
+              onMouseLeave={(e) => e.target.style.backgroundColor = '#2563eb'}
+            >
+              Done
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
 
 const QRCustomizer = () => {
   const { watch, setValue } = useFormContext();
@@ -127,9 +216,10 @@ const QRCustomizer = () => {
         const response = await contentAPI.upload(formData);
         if (response.data?.success) {
           let fileUrl = response.data.data.url;
-          // Prepend backend URL so Vite handles it properly
-          const backendUrl = (import.meta.env.VITE_API_URL || 'http://localhost:4001/api').replace('/api', '');
-          const absoluteUrl = `${backendUrl}${fileUrl}`;
+          // Only prepend backend URL if it's a relative path
+          const absoluteUrl = fileUrl.startsWith('http') 
+            ? fileUrl 
+            : `${import.meta.env.VITE_BACKEND_URL || (import.meta.env.VITE_API_URL || 'http://localhost:4001/api').replace('/api', '')}${fileUrl}`;
           
           const newLogo = {
             id: `ul-${Date.now()}`,
@@ -150,7 +240,9 @@ const QRCustomizer = () => {
         // Fallback to local DataURL if server fails
         const reader = new FileReader();
         reader.onload = () => {
-          saveLogoToGallery({ id: `ul-${Date.now()}`, url: reader.result, label: 'Custom (Local)' });
+          const dataUrl = reader.result;
+          saveLogoToGallery({ id: `ul-${Date.now()}`, url: dataUrl, label: 'Custom (Local)' });
+          updateNestedCustomization('logo', 'url', dataUrl);
         };
         reader.readAsDataURL(file);
       }
@@ -170,91 +262,6 @@ const QRCustomizer = () => {
     updateNestedCustomization('logo', 'url', '');
   };
 
-  // Color Picker Component
-  const ColorPickerPopover = ({ colorKey, label, nested = false, parentKey = '' }) => {
-    const currentColor = nested 
-      ? customization[parentKey]?.[colorKey] 
-      : customization[colorKey];
-    const isActive = activeColorPicker === `${parentKey}-${colorKey}`;
-
-    return (
-      <div className="relative">
-        <label className="block text-[0.75vw] font-medium text-slate-600 mb-[0.3vw]">
-          {label}
-        </label>
-        <div className="flex items-center gap-[0.5vw]">
-          <button
-            type="button"
-            data-picker-toggle={colorKey}
-            onClick={() => setActiveColorPicker(isActive ? null : `${parentKey}-${colorKey}`)}
-            className="w-[2.5vw] h-[2.5vw] rounded-[0.3vw] border-2 border-slate-200 shadow-sm cursor-pointer hover:border-slate-300 transition-colors"
-            style={{ backgroundColor: currentColor }}
-          />
-          <input
-            type="text"
-            value={currentColor}
-            onChange={(e) => {
-              if (nested) {
-                updateNestedCustomization(parentKey, colorKey, e.target.value);
-              } else {
-                updateCustomization(colorKey, e.target.value);
-              }
-            }}
-            className="flex-1 px-[0.5vw] py-[0.4vw] text-[0.8vw] border border-slate-200 rounded-[0.3vw] uppercase"
-          />
-        </div>
-        
-        <AnimatePresence>
-          {isActive && (
-            <motion.div
-              ref={pickerRef}
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="absolute z-50 mt-[0.5vw] p-[0.75vw] bg-white rounded-[0.5vw] shadow-xl border border-slate-200"
-            >
-              <HexColorPicker
-                color={currentColor}
-                onChange={(color) => {
-                  if (nested) {
-                    updateNestedCustomization(parentKey, colorKey, color);
-                  } else {
-                    updateCustomization(colorKey, color);
-                  }
-                }}
-                style={{ width: '12vw', height: '10vw' }}
-              />
-              <div className="mt-[0.5vw] flex items-center justify-between">
-                <HexColorInput
-                  color={currentColor}
-                  onChange={(color) => {
-                    if (nested) {
-                      updateNestedCustomization(parentKey, colorKey, color);
-                    } else {
-                      updateCustomization(colorKey, color);
-                    }
-                  }}
-                  className="w-full px-[0.5vw] py-[0.3vw] text-[0.75vw] border border-slate-200 rounded-[0.3vw] uppercase"
-                  prefixed
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => setActiveColorPicker(null)}
-                className="w-full mt-[0.5vw] px-[0.5vw] py-[0.3vw] text-white text-[0.75vw] rounded-[0.3vw] transition-colors"
-                style={{ backgroundColor: '#2563eb' }}
-                onMouseEnter={(e) => e.target.style.backgroundColor = '#1d4ed8'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = '#2563eb'}
-              >
-                Done
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-    );
-  };
-
   return (
     <div className="space-y-[1.25vw]">
       {/* Colors Section (with Quick Presets) */}
@@ -264,10 +271,22 @@ const QRCustomizer = () => {
           <ColorPickerPopover
             colorKey="foregroundColor"
             label="QR Code Color"
+            customization={customization}
+            activeColorPicker={activeColorPicker}
+            setActiveColorPicker={setActiveColorPicker}
+            updateCustomization={updateCustomization}
+            updateNestedCustomization={updateNestedCustomization}
+            pickerRef={pickerRef}
           />
           <ColorPickerPopover
             colorKey="backgroundColor"
             label="Background Color"
+            customization={customization}
+            activeColorPicker={activeColorPicker}
+            setActiveColorPicker={setActiveColorPicker}
+            updateCustomization={updateCustomization}
+            updateNestedCustomization={updateNestedCustomization}
+            pickerRef={pickerRef}
           />
         </div>
         <div>
@@ -424,9 +443,14 @@ const QRCustomizer = () => {
               <div className="relative">
                 <div className="w-[5vw] h-[5vw] rounded-[0.4vw] border border-slate-200 bg-white flex items-center justify-center placeholder-transparent p-[0.3vw]">
                   <img
-                    src={customization.logo.url}
+                    src={
+                      customization.logo.url?.startsWith('data:') || customization.logo.url?.startsWith('http')
+                        ? customization.logo.url
+                        : `${import.meta.env.VITE_BACKEND_URL || (import.meta.env.VITE_API_URL || 'http://localhost:4001/api').replace('/api', '')}${customization.logo.url}`
+                    }
                     alt="Logo"
                     className="max-w-full max-h-full object-contain"
+                    onError={(e) => { e.target.style.display = 'none'; }}
                   />
                 </div>
                 <button
@@ -469,12 +493,24 @@ const QRCustomizer = () => {
                     label="Logo Bg"
                     nested={true}
                     parentKey="logo"
+                    customization={customization}
+                    activeColorPicker={activeColorPicker}
+                    setActiveColorPicker={setActiveColorPicker}
+                    updateCustomization={updateCustomization}
+                    updateNestedCustomization={updateNestedCustomization}
+                    pickerRef={pickerRef}
                   />
                   <ColorPickerPopover
                     colorKey="borderColor"
                     label="Logo Border"
                     nested={true}
                     parentKey="logo"
+                    customization={customization}
+                    activeColorPicker={activeColorPicker}
+                    setActiveColorPicker={setActiveColorPicker}
+                    updateCustomization={updateCustomization}
+                    updateNestedCustomization={updateNestedCustomization}
+                    pickerRef={pickerRef}
                   />
                 </div>
               </div>
@@ -594,12 +630,24 @@ const QRCustomizer = () => {
                 label="Text Color"
                 nested={true}
                 parentKey="frame"
+                customization={customization}
+                activeColorPicker={activeColorPicker}
+                setActiveColorPicker={setActiveColorPicker}
+                updateCustomization={updateCustomization}
+                updateNestedCustomization={updateNestedCustomization}
+                pickerRef={pickerRef}
               />
               <ColorPickerPopover
                 colorKey="backgroundColor"
                 label="Frame Background"
                 nested={true}
                 parentKey="frame"
+                customization={customization}
+                activeColorPicker={activeColorPicker}
+                setActiveColorPicker={setActiveColorPicker}
+                updateCustomization={updateCustomization}
+                updateNestedCustomization={updateNestedCustomization}
+                pickerRef={pickerRef}
               />
             </div>
           </div>
@@ -609,24 +657,32 @@ const QRCustomizer = () => {
       {/* Margin Control */}
       <div className="p-[1vw] bg-slate-50 rounded-[0.5vw]">
         <h4 className="text-[0.9vw] font-semibold text-slate-800 mb-[0.75vw]">Quiet Zone (Margin)</h4>
-        <div className="flex items-center gap-[1vw]">
-          <input
-            type="range"
-            min="0"
-            max="10"
-            step="1"
-            value={customization.margin || 4}
-            onChange={(e) => updateCustomization('margin', parseInt(e.target.value))}
-            className="flex-1 h-[0.4vw] bg-slate-200 rounded-lg appearance-none cursor-pointer"
-            style={{ accentColor: '#2563eb' }}
-          />
-          <span className="text-[0.8vw] font-medium text-slate-700 w-[2vw] text-center">
-            {customization.margin || 4}
-          </span>
+        <div className="flex items-center gap-[1.5vw]">
+          <div className="flex items-center bg-white border border-slate-200 rounded-[0.5vw] overflow-hidden">
+            <button
+              type="button"
+              onClick={() => updateCustomization('margin', Math.max(0, (customization.margin || 0) - 1))}
+              className="p-[0.6vw] hover:bg-slate-50 text-slate-600 transition-colors"
+            >
+              <FiMinus className="text-[0.8vw]" />
+            </button>
+            <div className="w-[3vw] h-full flex items-center justify-center border-x border-slate-100 font-bold text-[0.9vw] text-slate-700">
+              {customization.margin || 0}
+            </div>
+            <button
+              type="button"
+              onClick={() => updateCustomization('margin', Math.min(20, (customization.margin || 0) + 1))}
+              className="p-[0.6vw] hover:bg-slate-50 text-slate-600 transition-colors"
+            >
+              <FiPlus className="text-[0.8vw]" />
+            </button>
+          </div>
+          <div className="flex-1">
+             <p className="text-[0.65vw] text-slate-500 italic">
+               The "quiet zone" is the area around the QR code that ensures scanners can read it. 4 is standard.
+             </p>
+          </div>
         </div>
-        <p className="text-[0.65vw] text-slate-500 mt-[0.3vw]">
-          Recommended minimum is 4 for reliable scanning
-        </p>
       </div>
 
 

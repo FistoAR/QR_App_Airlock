@@ -1,6 +1,8 @@
 import Content from '../models/Content.js';
 import QRCode from '../models/QRCode.js';
 import fileService from '../services/fileService.js';
+import https from 'https';
+import http from 'http';
 
 /**
  * @desc    Upload file for QR code
@@ -130,5 +132,42 @@ export const deleteFile = async (req, res, next) => {
   } catch (error) {
     console.error('Delete File Error:', error);
     next(error);
+  }
+};
+
+/**
+ * @desc    Proxy image to avoid CORS
+ * @route   GET /api/content/proxy
+ * @access  Private
+ */
+export const proxyImage = (req, res, next) => {
+  try {
+    const { url } = req.query;
+    if (!url) {
+      return res.status(400).send('URL is required');
+    }
+
+    const client = url.startsWith('https') ? https : http;
+    
+    client.get(url, (response) => {
+      // Basic validation
+      if (response.statusCode >= 400) {
+        return res.status(response.statusCode).send('Source image error');
+      }
+      
+      // Set headers from source
+      if (response.headers['content-type']) {
+        res.set('Content-Type', response.headers['content-type']);
+      }
+      res.set('Cache-Control', 'public, max-age=86400');
+      
+      response.pipe(res);
+    }).on('error', (err) => {
+      console.error('Proxy error:', err);
+      res.status(500).send('Communication error with image server');
+    });
+  } catch (error) {
+    console.error('Proxy Image Error:', error);
+    res.status(500).send('Internal server error');
   }
 };

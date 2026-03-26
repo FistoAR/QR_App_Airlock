@@ -8,6 +8,8 @@ import { toast } from '../components/UI/Toast';
 import { FiMail, FiLock, FiEye, FiEyeOff } from 'react-icons/fi';
 import { useAuthStore } from '../store/authStore';
 
+import qrimg from "../assets/wd.png"
+
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
@@ -41,14 +43,6 @@ const Login = () => {
       {/* Left Side - Form */}
       <div className="flex-1 flex items-center justify-center p-[3vw]">
         <div className="w-full max-w-[25vw]">
-          {/* Logo */}
-          <div className="flex items-center gap-[0.75vw] mb-[2vw]">
-            <div className="w-[3vw] h-[3vw] rounded-[0.5vw] flex items-center justify-center" style={{ backgroundColor: '#2563eb' }}>
-              <span className="text-white text-[1.25vw] font-bold">QR</span>
-            </div>
-            <span className="text-[1.25vw] font-bold text-slate-800">QR Generator</span>
-          </div>
-
           <h1 className="text-[1.75vw] font-bold text-slate-800 mb-[0.5vw]">Welcome back</h1>
           <p className="text-[0.9vw] text-slate-500 mb-[2vw]">
             Sign in to your account to continue
@@ -100,14 +94,11 @@ const Login = () => {
               )}
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center mb-[1.25vw]">
               <label className="flex items-center gap-[0.4vw]">
                 <input type="checkbox" className="w-[1vw] h-[1vw] rounded" style={{ accentColor: '#2563eb' }} />
                 <span className="text-[0.8vw] text-slate-600">Remember me</span>
               </label>
-              <Link to="/forgot-password" className="text-[0.8vw] hover:underline" style={{ color: '#2563eb' }}>
-                Forgot password?
-              </Link>
             </div>
 
             <button
@@ -136,18 +127,7 @@ const Login = () => {
       <div className="hidden lg:flex flex-1 items-center justify-center p-[3vw]" style={{ backgroundImage: 'linear-gradient(135deg, #2563eb 0%, #1e3a8a 100%)' }}>
         <div className="text-center text-white max-w-[30vw]">
           <div className="w-[15vw] h-[15vw] mx-auto mb-[2vw] bg-white/10 rounded-[1vw] flex items-center justify-center">
-            <svg viewBox="0 0 100 100" className="w-[10vw] h-[10vw]">
-              <rect x="10" y="10" width="80" height="80" fill="white" rx="8"/>
-              <rect x="20" y="20" width="15" height="15" fill="#1e40af"/>
-              <rect x="42.5" y="20" width="15" height="15" fill="#1e40af"/>
-              <rect x="65" y="20" width="15" height="15" fill="#1e40af"/>
-              <rect x="20" y="42.5" width="15" height="15" fill="#1e40af"/>
-              <rect x="42.5" y="42.5" width="15" height="15" fill="#1e40af"/>
-              <rect x="65" y="42.5" width="15" height="15" fill="#1e40af"/>
-              <rect x="20" y="65" width="15" height="15" fill="#1e40af"/>
-              <rect x="42.5" y="65" width="15" height="15" fill="#1e40af"/>
-              <rect x="65" y="65" width="15" height="15" fill="#1e40af"/>
-            </svg>
+            <img src={qrimg} alt="QR Code" className="w-[12vw] h-[12vw] object-contain rounded-[0.5vw]" />
           </div>
           <h2 className="text-[1.75vw] font-bold mb-[0.75vw]">Create Beautiful QR Codes</h2>
           <p className="text-[0.95vw] text-white/80">

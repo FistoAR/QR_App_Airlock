@@ -52,16 +52,37 @@ const sortOptions = [
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:4001';
 
 /* ─── QRCodeCard ──────────────────────────────────────────────────────── */
-const QRCodeCard = React.memo(({
+const QRCodeCard = React.memo(React.forwardRef(({
   qr, viewMode, navigate, activeMenu, setActiveMenu,
   handleDownload, handleDuplicate, handleDelete,
   isSelected, toggleSelect, lastLocation, onLocationClick,
-}) => {
+  isDuplicating, isDeleting,
+}, ref) => {
   const imgSrc = qr.qrImageUrl
     ? (qr.qrImageUrl.startsWith('http') ? qr.qrImageUrl : `${BACKEND_URL}${qr.qrImageUrl}`)
     : null;
 
-  const cardRef = useRef(null);
+  const [imgError, setImgError] = useState(false);
+
+  const QRPlaceholder = ({ size = '100%' }) => (
+    <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style={{ opacity: 0.25 }}>
+      <rect x="5" y="5" width="38" height="38" rx="4" fill="none" stroke="#94a3b8" strokeWidth="6"/>
+      <rect x="16" y="16" width="16" height="16" rx="2" fill="#94a3b8"/>
+      <rect x="57" y="5" width="38" height="38" rx="4" fill="none" stroke="#94a3b8" strokeWidth="6"/>
+      <rect x="68" y="16" width="16" height="16" rx="2" fill="#94a3b8"/>
+      <rect x="5" y="57" width="38" height="38" rx="4" fill="none" stroke="#94a3b8" strokeWidth="6"/>
+      <rect x="16" y="68" width="16" height="16" rx="2" fill="#94a3b8"/>
+      <rect x="57" y="57" width="8" height="8" rx="1" fill="#94a3b8"/>
+      <rect x="70" y="57" width="8" height="8" rx="1" fill="#94a3b8"/>
+      <rect x="83" y="57" width="8" height="8" rx="1" fill="#94a3b8"/>
+      <rect x="57" y="70" width="8" height="8" rx="1" fill="#94a3b8"/>
+      <rect x="83" y="70" width="8" height="8" rx="1" fill="#94a3b8"/>
+      <rect x="57" y="83" width="8" height="8" rx="1" fill="#94a3b8"/>
+      <rect x="70" y="83" width="8" height="8" rx="1" fill="#94a3b8"/>
+      <rect x="83" y="83" width="8" height="8" rx="1" fill="#94a3b8"/>
+    </svg>
+  );
+
   const [menuDirection, setMenuDirection] = useState('down');
 
   const safeLoc = safeLocation(lastLocation);
@@ -71,27 +92,27 @@ const QRCodeCard = React.memo(({
     : 'No scan locations yet — click to check';
 
   useEffect(() => {
-    if (activeMenu === qr._id && cardRef.current) {
-      const rect = cardRef.current.getBoundingClientRect();
+    if (activeMenu === qr._id && ref?.current) {
+      const rect = ref.current.getBoundingClientRect();
       setMenuDirection(window.innerHeight - rect.bottom < 200 ? 'up' : 'down');
     }
-  }, [activeMenu, qr._id]);
+  }, [activeMenu, qr._id, ref]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (activeMenu === qr._id && cardRef.current && !cardRef.current.contains(e.target)) {
+      if (activeMenu === qr._id && ref?.current && !ref.current.contains(e.target)) {
         setActiveMenu(null);
       }
     };
     if (activeMenu === qr._id) document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [activeMenu, qr._id, setActiveMenu]);
+  }, [activeMenu, qr._id, setActiveMenu, ref]);
 
   /* ── LIST VIEW ── */
   if (viewMode === 'list') {
     return (
       <motion.div
-        layout ref={cardRef}
+        layout ref={ref}
         initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
         className="bg-white rounded-[0.5vw] border border-slate-200 p-[0.6vw] flex items-center gap-[1vw] hover:shadow-sm transition-shadow group relative"
       >
@@ -99,11 +120,17 @@ const QRCodeCard = React.memo(({
           <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(qr._id)}
             className="w-[1vw] h-[1vw] rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
         </div>
-        <Link to={`/qrcodes/${qr._id}`} className="shrink-0">
+        <Link to={`/qrcodes/${qr._id}`} className="shrink-0 relative">
           <div className="w-[3.5vw] h-[3.5vw] bg-slate-50 rounded-[0.3vw] p-[0.3vw] flex items-center justify-center">
-            {imgSrc ? <img src={imgSrc} alt={qr.title} className="w-full h-full object-contain" />
-                    : <FiGrid className="text-[1.5vw] text-slate-300" />}
+            {(imgSrc && !imgError)
+              ? <img src={imgSrc} alt={qr.title} className="w-full h-full object-contain" onError={() => setImgError(true)} />
+              : <QRPlaceholder size="100%" />}
           </div>
+          {isDuplicating && (
+            <div className="absolute inset-0 bg-white/60 flex items-center justify-center rounded-[0.3vw]">
+              <div className="animate-spin rounded-full h-[1vw] w-[1vw] border-2 border-blue-600 border-t-transparent" />
+            </div>
+          )}
         </Link>
 
         <div className="flex-1 min-w-0">
@@ -133,17 +160,29 @@ const QRCodeCard = React.memo(({
         </div>
 
         <div className="relative">
-          <button onClick={() => setActiveMenu(activeMenu === qr._id ? null : qr._id)}
-            className="p-[0.4vw] text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-[0.3vw] cursor-pointer">
-            <FiMoreVertical className="text-[1vw]" />
-          </button>
-          <AnimatePresence>
-            {activeMenu === qr._id && (
-              <QRCodeMenu qr={qr} direction={menuDirection} navigate={navigate}
-                setActiveMenu={setActiveMenu} handleDownload={handleDownload}
-                handleDuplicate={handleDuplicate} handleDelete={handleDelete} />
-            )}
-          </AnimatePresence>
+          {isDuplicating ? (
+            <div className="p-[0.4vw] flex items-center justify-center">
+              <div className="animate-spin rounded-full h-[1vw] w-[1vw] border-2 border-blue-500 border-t-transparent" />
+            </div>
+          ) : isDeleting ? (
+            <div className="p-[0.4vw] flex items-center justify-center">
+              <div className="animate-spin rounded-full h-[1vw] w-[1vw] border-2 border-red-500 border-t-transparent" />
+            </div>
+          ) : (
+            <>
+              <button onClick={() => setActiveMenu(activeMenu === qr._id ? null : qr._id)}
+                className="p-[0.4vw] text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-[0.3vw] cursor-pointer">
+                <FiMoreVertical className="text-[1vw]" />
+              </button>
+              <AnimatePresence>
+                {activeMenu === qr._id && (
+                  <QRCodeMenu qr={qr} direction={menuDirection} navigate={navigate}
+                    setActiveMenu={setActiveMenu} handleDownload={handleDownload}
+                    handleDuplicate={handleDuplicate} handleDelete={handleDelete} />
+                )}
+              </AnimatePresence>
+            </>
+          )}
         </div>
       </motion.div>
     );
@@ -152,7 +191,7 @@ const QRCodeCard = React.memo(({
   /* ── GRID VIEW ── */
   return (
     <motion.div
-      layout ref={cardRef}
+      layout ref={ref}
       initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
       className="bg-white rounded-[0.75vw] border border-slate-200 hover:shadow-md transition-shadow group relative text-left"
     >
@@ -161,10 +200,18 @@ const QRCodeCard = React.memo(({
           className="w-[1vw] h-[1vw] rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer opacity-0 group-hover:opacity-100 checked:opacity-100 transition-opacity" />
       </div>
       <Link to={`/qrcodes/${qr._id}`} className="block">
-        <div className="aspect-square bg-slate-50 p-[1vw] flex items-center justify-center">
-          {imgSrc
-            ? <img src={imgSrc} alt={qr.title} className="w-full h-full object-contain group-hover:scale-105 transition-transform" />
-            : <FiGrid className="text-[3vw] text-slate-300" />}
+        <div className="aspect-square bg-slate-50 p-[1vw] flex items-center justify-center relative">
+          {(imgSrc && !imgError)
+            ? <img src={imgSrc} alt={qr.title} className="w-full h-full object-contain group-hover:scale-105 transition-transform" onError={() => setImgError(true)} />
+            : <div className="flex flex-col items-center justify-center gap-[0.5vw]">
+                <QRPlaceholder size="60%" />
+                <span className="text-[0.6vw] text-slate-400 font-medium">Not Available</span>
+              </div>}
+          {isDuplicating && (
+             <div className="absolute inset-0 bg-white/60 flex items-center justify-center">
+               <div className="animate-spin rounded-full h-[2vw] w-[2vw] border-2 border-blue-600 border-t-transparent" />
+             </div>
+          )}
         </div>
       </Link>
 
@@ -177,17 +224,29 @@ const QRCodeCard = React.memo(({
             </p>
           </div>
           <div className="relative">
-            <button onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === qr._id ? null : qr._id); }}
-              className="p-[0.4vw] text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-[0.3vw] cursor-pointer">
-              <FiMoreVertical className="text-[1vw]" />
-            </button>
-            <AnimatePresence>
-              {activeMenu === qr._id && (
-                <QRCodeMenu qr={qr} direction={menuDirection} navigate={navigate}
-                  setActiveMenu={setActiveMenu} handleDownload={handleDownload}
-                  handleDuplicate={handleDuplicate} handleDelete={handleDelete} />
-              )}
-            </AnimatePresence>
+            {isDuplicating ? (
+              <div className="p-[0.4vw] flex items-center justify-center">
+                <div className="animate-spin rounded-full h-[1vw] w-[1vw] border-2 border-blue-500 border-t-transparent" />
+              </div>
+            ) : isDeleting ? (
+              <div className="p-[0.4vw] flex items-center justify-center">
+                <div className="animate-spin rounded-full h-[1vw] w-[1vw] border-2 border-red-500 border-t-transparent" />
+              </div>
+            ) : (
+              <>
+                <button onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === qr._id ? null : qr._id); }}
+                  className="p-[0.4vw] text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-[0.3vw] cursor-pointer">
+                  <FiMoreVertical className="text-[1vw]" />
+                </button>
+                <AnimatePresence>
+                  {activeMenu === qr._id && (
+                    <QRCodeMenu qr={qr} direction={menuDirection} navigate={navigate}
+                      setActiveMenu={setActiveMenu} handleDownload={handleDownload}
+                      handleDuplicate={handleDuplicate} handleDelete={handleDelete} />
+                  )}
+                </AnimatePresence>
+              </>
+            )}
           </div>
         </div>
 
@@ -221,7 +280,47 @@ const QRCodeCard = React.memo(({
       </div>
     </motion.div>
   );
-});
+}));
+
+/* ─── RenameModal ─────────────────────────────────────────────────────── */
+const RenameModal = ({ isOpen, defaultValue, onConfirm, onCancel }) => {
+  const [value, setValue] = useState(defaultValue);
+  useEffect(() => { if (isOpen) setValue(defaultValue); }, [isOpen, defaultValue]);
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center" onClick={onCancel}>
+      <motion.div
+        initial={{ opacity: 0, y: 60 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 60 }}
+        className="bg-white rounded-t-[1vw] sm:rounded-[0.8vw] shadow-2xl border border-slate-200 p-[1.5vw] w-full max-w-[28vw] mx-auto"
+        onClick={e => e.stopPropagation()}
+      >
+        <h3 className="text-[1vw] font-bold text-slate-800 mb-[0.3vw]">Name Your Duplicate</h3>
+        <p className="text-[0.7vw] text-slate-400 mb-[1vw]">Give the new QR code a unique name to tell it apart.</p>
+        <input
+          autoFocus
+          type="text"
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') onConfirm(value); if (e.key === 'Escape') onCancel(); }}
+          className="w-full px-[0.75vw] py-[0.6vw] text-[0.85vw] border border-slate-200 rounded-[0.5vw] focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50"
+          placeholder="e.g. Campaign QR (Copy)"
+        />
+        <div className="flex gap-[0.5vw] mt-[1vw]">
+          <button onClick={onCancel} className="flex-1 py-[0.5vw] text-[0.8vw] font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-[0.5vw] transition-colors cursor-pointer">
+            Cancel
+          </button>
+          <button
+            onClick={() => onConfirm(value)}
+            disabled={!value.trim()}
+            className="flex-1 py-[0.5vw] text-[0.8vw] font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-[0.5vw] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Duplicate
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
 
 /* ─── QRCodeMenu ──────────────────────────────────────────────────────── */
 const QRCodeMenu = ({ qr, direction, navigate, setActiveMenu, handleDownload, handleDuplicate, handleDelete }) => {
@@ -382,6 +481,10 @@ const MyQRCodes = () => {
   const [pagination, setPagination] = useState({ page: 1, limit: 12, total: 0, totalPages: 0 });
   const [activeMenu, setActiveMenu] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [duplicatingId, setDuplicatingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [renameModal, setRenameModal] = useState({ open: false, id: null, defaultTitle: '' });
   const [qrLocationMap, setQrLocationMap] = useState({});
   const [locationPanel, setLocationPanel] = useState({
     open: false, qrId: null, qrTitle: '', loading: false, scans: [], breakdown: [],
@@ -445,13 +548,15 @@ const MyQRCodes = () => {
       variant: 'danger',
     });
     if (!ok) return;
+    setDeletingId(id);
+    setActiveMenu(null);
     try {
       await qrCodeAPI.delete(id);
       toast.success('QR code deleted');
       setSelectedIds(prev => prev.filter(i => i !== id));
       fetchQRCodes();
     } catch { toast.error('Failed to delete'); }
-    setActiveMenu(null);
+    finally { setDeletingId(null); }
   };
 
 
@@ -465,13 +570,14 @@ const MyQRCodes = () => {
       variant: 'danger',
     });
     if (!ok) return;
-    setLoading(true);
+    setBulkDeleting(true);
     try {
       await qrCodeAPI.deleteMany(selectedIds);
       toast.success(`${selectedIds.length} QR codes deleted`);
       setSelectedIds([]);
       fetchQRCodes();
-    } catch { toast.error('Failed to delete'); setLoading(false); }
+    } catch { toast.error('Failed to delete'); }
+    finally { setBulkDeleting(false); }
   };
 
 
@@ -481,13 +587,26 @@ const MyQRCodes = () => {
   const toggleSelectAll = () =>
     setSelectedIds(selectedIds.length === qrCodes.length ? [] : qrCodes.map(q => q._id));
 
-  const handleDuplicate = async (id) => {
-    try {
-      await qrCodeAPI.duplicate(id);
-      toast.success('Duplicated');
-      fetchQRCodes();
-    } catch { toast.error('Failed to duplicate'); }
+  const handleDuplicate = (id) => {
+    const original = qrCodes.find(q => q._id === id);
+    setRenameModal({ open: true, id, defaultTitle: original ? `${original.title} (Copy)` : 'New QR Code' });
     setActiveMenu(null);
+  };
+
+  const confirmDuplicate = async (newTitle) => {
+    const { id } = renameModal;
+    setRenameModal({ open: false, id: null, defaultTitle: '' });
+    if (!newTitle?.trim()) return;
+    setDuplicatingId(id);
+    try {
+      await qrCodeAPI.duplicate(id, { title: newTitle.trim() });
+      toast.success('Duplicated successfully');
+      fetchQRCodes();
+    } catch {
+      toast.error('Failed to duplicate');
+    } finally {
+      setDuplicatingId(null);
+    }
   };
 
   const handleDownload = async (id, title) => {
@@ -508,6 +627,18 @@ const MyQRCodes = () => {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
+
+      {/* Rename Modal for Duplicate */}
+      <AnimatePresence>
+        {renameModal.open && (
+          <RenameModal
+            isOpen={renameModal.open}
+            defaultValue={renameModal.defaultTitle}
+            onConfirm={confirmDuplicate}
+            onCancel={() => setRenameModal({ open: false, id: null, defaultTitle: '' })}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Location Panel */}
       <LocationPanel panel={locationPanel} onClose={closeLocationPanel} />
@@ -571,16 +702,28 @@ const MyQRCodes = () => {
             className="flex items-center justify-between bg-blue-50 border border-blue-100 py-[0.5vw] px-[1vw] rounded-[0.6vw] mb-[0.8vw] shadow-sm"
           >
             <div className="flex items-center gap-[1vw]">
-              <div className="flex items-center gap-[0.5vw]">
-                <input type="checkbox" checked={selectedIds.length === qrCodes.length} onChange={toggleSelectAll}
-                  className="w-[1vw] h-[1vw] rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
-                <span className="text-[0.8vw] font-bold text-blue-800">{selectedIds.length} items selected</span>
-              </div>
-              <button onClick={() => setSelectedIds([])} className="text-[0.7vw] text-blue-600 hover:underline font-medium">Deselect all</button>
+              {!bulkDeleting && (
+                <>
+                  <div className="flex items-center gap-[0.5vw]">
+                    <input type="checkbox" checked={selectedIds.length === qrCodes.length} onChange={toggleSelectAll}
+                      className="w-[1vw] h-[1vw] rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
+                    <span className="text-[0.8vw] font-bold text-blue-800">{selectedIds.length} items selected</span>
+                  </div>
+                  <button onClick={() => setSelectedIds([])} className="text-[0.7vw] text-blue-600 hover:underline font-medium">Deselect all</button>
+                </>
+              )}
+              {bulkDeleting && (
+                <span className="text-[0.8vw] font-bold text-red-600">Deleting {selectedIds.length} items...</span>
+              )}
             </div>
-            <button onClick={handleBulkDelete}
-              className="flex items-center gap-[0.4vw] bg-red-600 text-white px-[1vw] py-[0.4vw] rounded-[0.4vw] text-[0.8vw] font-bold hover:bg-red-700 transition-colors shadow-sm">
-              <FiTrash2 className="text-[0.9vw]" /> Delete Selected
+            <button
+              onClick={handleBulkDelete}
+              disabled={bulkDeleting}
+              className="flex items-center gap-[0.4vw] bg-red-600 text-white px-[1vw] py-[0.4vw] rounded-[0.4vw] text-[0.8vw] font-bold hover:bg-red-700 transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed"
+            >
+              {bulkDeleting
+                ? <><div className="animate-spin rounded-full h-[0.9vw] w-[0.9vw] border-2 border-white border-t-transparent" /> Deleting...</>
+                : <><FiTrash2 className="text-[0.9vw]" /> Delete Selected</>}
             </button>
           </motion.div>
         )}
@@ -597,19 +740,21 @@ const MyQRCodes = () => {
             <AnimatePresence mode="popLayout">
               {qrCodes.map((qr) => (
                 <QRCodeCard
-                  key={qr._id}
-                  qr={qr}
-                  viewMode={viewMode}
-                  navigate={navigate}
-                  activeMenu={activeMenu}
-                  setActiveMenu={setActiveMenu}
-                  handleDownload={handleDownload}
-                  handleDuplicate={handleDuplicate}
-                  handleDelete={handleDelete}
-                  isSelected={selectedIds.includes(qr._id)}
-                  toggleSelect={toggleSelect}
-                  lastLocation={qrLocationMap[qr._id] || null}
-                  onLocationClick={handleLocationClick}
+                   key={qr._id}
+                   qr={qr}
+                   viewMode={viewMode}
+                   navigate={navigate}
+                   activeMenu={activeMenu}
+                   setActiveMenu={setActiveMenu}
+                   handleDownload={handleDownload}
+                   handleDuplicate={handleDuplicate}
+                   handleDelete={handleDelete}
+                   isSelected={selectedIds.includes(qr._id)}
+                   toggleSelect={toggleSelect}
+                   lastLocation={qrLocationMap[qr._id] || null}
+                   onLocationClick={handleLocationClick}
+                   isDuplicating={duplicatingId === qr._id}
+                   isDeleting={deletingId === qr._id}
                 />
               ))}
             </AnimatePresence>

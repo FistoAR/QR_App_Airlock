@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { FiUser, FiMail, FiPhone, FiSmartphone, FiGlobe, FiMapPin, FiDownload, FiFile, FiLink, FiExternalLink, FiLinkedin, FiBriefcase } from 'react-icons/fi';
+import { FiUser, FiMail, FiPhone, FiSmartphone, FiGlobe, FiMapPin, FiDownload, FiFile, FiLink, FiExternalLink, FiLinkedin, FiBriefcase, FiChevronRight } from 'react-icons/fi';
 
 import api from '../services/api';
 
@@ -107,8 +107,8 @@ const ScanPage = () => {
 
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 py-8 px-4">
-      <div className="max-w-lg mx-auto">
+    <div className="h-screen bg-gradient-to-b from-slate-50 to-slate-100 overflow-y-auto">
+      <div className="max-w-lg mx-auto px-4 py-6 pb-20">
         {renderContent()}
         
         {/* Powered By Footer */}
@@ -162,54 +162,69 @@ const VCardViewer = ({ data }) => {
           )}
         </div>
         <h1 className="text-2xl font-bold">{`${data.firstName || ''} ${data.lastName || ''}`}</h1>
-        {data.title && <p className="text-white/80">{data.title}</p>}
-        {data.organization && <p className="text-white/80">{data.organization}</p>}
+        {data.title && <p className="text-white font-medium text-lg mt-1">{data.title}</p>}
+        {data.organization && <p className="text-white/90 text-sm">{data.organization}</p>}
       </div>
 
       {/* Contact Details */}
       <div className="p-6 space-y-4">
         {data.email && (
-          <a href={`mailto:${data.email}`} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
+          <a href={`mailto:${data.email}`} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors group">
             <FiMail className="text-xl" style={{ color: '#2563eb' }} />
-            <div className="flex flex-col">
-              <span className="text-[0.65vw] text-slate-400 font-bold uppercase">Email</span>
-              <span className="text-slate-700">{data.email}</span>
+            <div className="flex flex-col flex-1">
+              <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Email</span>
+              <span className="text-slate-700 font-medium">{data.email}</span>
+            </div>
+            <div className="flex items-center gap-1 text-[10px] font-bold text-blue-600 px-2 py-1 bg-blue-50 rounded-md border border-blue-100">
+              GO <FiChevronRight />
             </div>
           </a>
         )}
         {data.phone && (
-          <a href={`tel:${data.phone}`} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
+          <a href={`tel:${data.phone}`} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors group">
             <FiPhone className="text-xl text-blue-500" />
-            <div className="flex flex-col">
-              <span className="text-[0.65vw] text-slate-400 font-bold uppercase">Office Phone</span>
-              <span className="text-slate-700">{data.phone}</span>
+            <div className="flex flex-col flex-1">
+              <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Office Phone</span>
+              <span className="text-slate-700 font-medium">{data.phone}</span>
+            </div>
+            <div className="flex items-center gap-1 text-[10px] font-bold text-blue-600 px-2 py-1 bg-blue-50 rounded-md border border-blue-100">
+              GO <FiChevronRight />
             </div>
           </a>
         )}
         {data.mobile && (
-          <a href={`tel:${data.mobile}`} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
+          <a href={`tel:${data.mobile}`} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors group">
             <FiSmartphone className="text-xl text-emerald-500" />
-            <div className="flex flex-col">
-              <span className="text-[0.65vw] text-slate-400 font-bold uppercase">Mobile Number</span>
-              <span className="text-slate-700">{data.mobile}</span>
+            <div className="flex flex-col flex-1">
+              <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Mobile Number</span>
+              <span className="text-slate-700 font-medium">{data.mobile}</span>
+            </div>
+            <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 px-2 py-1 bg-emerald-50 rounded-md border border-emerald-100">
+              GO <FiChevronRight />
             </div>
           </a>
         )}
         {data.website && (
-          <a href={data.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
+          <a href={data.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors group">
             <FiGlobe className="text-xl text-sky-500" />
-            <div className="flex flex-col">
-              <span className="text-[0.65vw] text-slate-400 font-bold uppercase">Website</span>
-              <span className="text-slate-700">{data.website}</span>
+            <div className="flex flex-col flex-1">
+              <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Website</span>
+              <span className="text-slate-700 font-medium">{data.website}</span>
+            </div>
+            <div className="flex items-center gap-1 text-[10px] font-bold text-sky-600 px-2 py-1 bg-sky-50 rounded-md border border-sky-100">
+              GO <FiChevronRight />
             </div>
           </a>
         )}
         {data.linkedin && (
-          <a href={data.linkedin} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
+          <a href={data.linkedin} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors group">
             <FiLinkedin className="text-xl text-blue-700" />
-            <div className="flex flex-col">
-              <span className="text-[0.65vw] text-slate-400 font-bold uppercase">LinkedIn</span>
-              <span className="text-slate-700">{data.linkedin}</span>
+            <div className="flex flex-col flex-1">
+              <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">LinkedIn</span>
+              <span className="text-slate-700 font-medium">{data.linkedin}</span>
+            </div>
+            <div className="flex items-center gap-1 text-[10px] font-bold text-blue-700 px-2 py-1 bg-blue-50 rounded-md border border-blue-100">
+              GO <FiChevronRight />
             </div>
           </a>
         )}
@@ -218,8 +233,8 @@ const VCardViewer = ({ data }) => {
           <div className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg">
             <FiMapPin className="text-xl flex-shrink-0 mt-0.5" style={{ color: '#2563eb' }} />
             <div className="flex flex-col">
-              <span className="text-[0.65vw] text-slate-400 font-bold uppercase">Address</span>
-              <span className="text-slate-700">
+              <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Address</span>
+              <span className="text-slate-700 font-medium">
                 {[data.address.street, data.address.city, data.address.state, data.address.zip, data.address.country]
                   .filter(Boolean)
                   .join(', ')}

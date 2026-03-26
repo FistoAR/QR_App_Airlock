@@ -404,7 +404,7 @@ export const duplicateQRCode = async (req, res, next) => {
     // Create duplicate QR code
     const newQRCode = await QRCode.create({
       user: req.user.id,
-      title: `${qrCode.title} (Copy)`,
+      title: req.body.title || `${qrCode.title} (Copy)`,
       description: qrCode.description,
       type: qrCode.type,
       isDynamic: qrCode.isDynamic,

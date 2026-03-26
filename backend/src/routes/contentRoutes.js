@@ -3,12 +3,15 @@ import {
   uploadFile,
   updateContent,
   getContent,
-  deleteFile
+  deleteFile,
+  proxyImage
 } from '../controllers/contentController.js';
 import { protect } from '../middleware/auth.js';
 import { upload } from '../middleware/upload.js';
 
 const router = express.Router();
+
+router.get('/proxy', proxyImage);
 
 // All routes require authentication
 router.use(protect);

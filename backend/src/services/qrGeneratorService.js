@@ -4,6 +4,7 @@ import { createCanvas, loadImage } from 'canvas';
 import fileService from './fileService.js';
 import fs from 'fs';
 import path from 'path';
+import axios from 'axios';
 
 class QRGeneratorService {
 
@@ -529,28 +530,188 @@ class QRGeneratorService {
   }
 
   /**
+   * Helper to convert image to DataURL for SVG embedding
+   */
+  async getLogoAsDataURL(logoPath) {
+    if (!logoPath) return '';
+    if (logoPath.startsWith('data:')) return logoPath;
+    
+    console.log(`[LogoToDataURL] Processing logo: ${logoPath}`);
+    try {
+      let buffer;
+      let mime = 'image/png';
+      
+      // 1. If it's a URL, try fetching it
+      if (logoPath.startsWith('http')) {
+        try {
+          console.log(`[LogoToDataURL] Fetching URL: ${logoPath}`);
+          const response = await axios.get(logoPath, { 
+            responseType: 'arraybuffer',
+            timeout: 5000,
+            headers: { 'Accept': 'image/*' }
+          });
+          buffer = Buffer.from(response.data);
+          mime = response.headers['content-type'] || 'image/png';
+          console.log(`[LogoToDataURL] Fetch successful. Mime: ${mime}, Size: ${buffer.length}`);
+        } catch (axiosErr) {
+          console.error(`[LogoToDataURL] Axios fetch failed for ${logoPath}:`, axiosErr.message);
+          
+          // Fallback to local disk only if we are NOT using FTP
+          if (!fileService.useFtp && logoPath.includes('/uploads/')) {
+            const uploadMatch = logoPath.match(/\/uploads\/(.+)$/);
+            const fileName = uploadMatch ? uploadMatch[1] : null;
+            if (fileName) {
+              const localPath = path.join(fileService.uploadsDir, fileName);
+              if (fs.existsSync(localPath)) {
+                console.log(`[LogoToDataURL] Fallback: Reading from local disk: ${localPath}`);
+                buffer = fs.readFileSync(localPath);
+              }
+            }
+          }
+        }
+      } else {
+        // 2. Direct path or internal reference
+        const fileName = logoPath.startsWith('/uploads/') ? logoPath.replace('/uploads/', '') : logoPath;
+        const fullPath = fileService.getFullPath(fileName);
+        
+        // If fileService.getFullPath returns a URL (when USE_FTP is true), we need to fetch it
+        if (fullPath.startsWith('http')) {
+          console.log(`[LogoToDataURL] Internal path resolved to URL: ${fullPath}`);
+          const response = await axios.get(fullPath, { responseType: 'arraybuffer', timeout: 5000 });
+          buffer = Buffer.from(response.data);
+          mime = response.headers['content-type'] || 'image/png';
+        } else if (fs.existsSync(fullPath)) {
+          console.log(`[LogoToDataURL] Reading directly from disk: ${fullPath}`);
+          buffer = fs.readFileSync(fullPath);
+          const ext = path.extname(fullPath).toLowerCase();
+          mime = ext === '.svg' ? 'image/svg+xml' : (ext === '.jpg' || ext === '.jpeg') ? 'image/jpeg' : 'image/png';
+        }
+      }
+      
+      if (!buffer) {
+        console.warn(`[LogoToDataURL] Could not retrieve logo buffer for: ${logoPath}`);
+        return '';
+      }
+      
+      return `data:${mime};base64,${buffer.toString('base64')}`;
+    } catch (e) {
+      console.error('[LogoToDataURL] Critical Error:', e);
+      return '';
+    }
+  }
+
+  /**
    * Generate QR code as different formats
    */
   async generateAsFormat(content, customization, format = 'png') {
+    if (format === 'svg') {
+      const {
+        foregroundColor = '#000000',
+        backgroundColor = '#FFFFFF',
+        margin = 4,
+        width = 1000,
+        logo = null,
+        frame = null
+      } = customization;
+
+      // 1. Get base QR SVG from 'qrcode' lib
+      let qrSvg = await QRCode.toString(content, {
+        type: 'svg',
+        margin: margin,
+        width: width,
+        color: { dark: foregroundColor, light: backgroundColor }
+      });
+
+      // Remove the <?xml...?> tag if present to nest easily
+      qrSvg = qrSvg.replace(/<\?xml.*?\?>/, '').trim();
+
+      // 2. Add Logo to SVG if exists
+      if (logo && logo.url) {
+        const dataUrl = await this.getLogoAsDataURL(logo.url);
+        if (dataUrl) {
+           const lSize = width * (logo.size || 0.25);
+           const lBg = logo.backgroundColor || backgroundColor || '#FFFFFF';
+           const lBorder = logo.borderColor || '#E2E8F0';
+           const lPos = (width - lSize) / 2;
+           const radius = lSize * 0.15;
+           const bWidth = Math.max(2, lSize * 0.02);
+
+           const logoSvg = `
+             <g id="logo-group">
+               <rect x="${lPos - bWidth/2}" y="${lPos - bWidth/2}" width="${lSize + bWidth}" height="${lSize + bWidth}" 
+                     rx="${radius}" ry="${radius}" fill="${lBg}" stroke="${lBorder}" stroke-width="${bWidth}" />
+               <image x="${lPos}" y="${lPos}" width="${lSize}" height="${lSize}" href="${dataUrl}" xlink:href="${dataUrl}" preserveAspectRatio="xMidYMid meet" />
+             </g>`;
+           
+           const lastSvgCloseIdx = qrSvg.lastIndexOf('</svg>');
+           if (lastSvgCloseIdx !== -1) {
+             qrSvg = qrSvg.substring(0, lastSvgCloseIdx) + logoSvg + '</svg>';
+           } else {
+             qrSvg += logoSvg;
+           }
+           
+           // Ensure it has xlink namespace if logo added
+           if (!qrSvg.includes('xmlns:xlink')) {
+              qrSvg = qrSvg.replace('<svg ', '<svg xmlns:xlink="http://www.w3.org/1999/xlink" ');
+           }
+        }
+      }
+
+      // 3. Add Frame to SVG if exists
+      if (frame && frame.style !== 'none') {
+        const padding = width * 0.08;
+        const textHeight = frame.text ? width * 0.12 : 0;
+        const totalW = width + padding * 2;
+        const totalH = width + padding * 2 + textHeight;
+        const fBg = frame.backgroundColor || '#FFFFFF';
+        const fText = frame.textColor || '#000000';
+        const fStyle = frame.style;
+
+        let frameContent = '';
+        if (fStyle === 'simple' || fStyle === 'rounded') {
+           const radius = fStyle === 'rounded' ? totalW * 0.06 : 0;
+           const bW = Math.max(8, width * 0.015);
+           frameContent = `<rect x="${bW/2}" y="${bW/2}" width="${totalW-bW}" height="${totalH-bW}" rx="${radius}" fill="${fBg}" stroke="${fText}" stroke-width="${bW}" />`;
+        } else if (fStyle === 'banner') {
+           const barH = totalH * 0.1;
+           frameContent = `
+             <rect width="${totalW}" height="${totalH}" fill="${fBg}" />
+             <rect width="${totalW}" height="${barH}" fill="${fText}" />
+             <rect y="${totalH - barH}" width="${totalW}" height="${barH}" fill="${fText}" />
+           `;
+        } else {
+           frameContent = `<rect width="${totalW}" height="${totalH}" fill="${fBg}" />`;
+        }
+
+        // Add Text
+        if (frame.text) {
+          const fontSize = Math.floor(width * 0.06);
+          const ty = fStyle === 'banner' ? (totalH - (totalH * 0.1)/2) : (totalH - textHeight/2 - padding/2);
+          const tColor = fStyle === 'banner' ? fBg : fText;
+          frameContent += `<text x="${totalW/2}" y="${ty}" font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="900" text-anchor="middle" dominant-baseline="middle" fill="${tColor}">${frame.text}</text>`;
+        }
+
+        const finalSvg = `<?xml version="1.0" standalone="no"?>
+<svg width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  ${frameContent}
+  <g transform="translate(${padding}, ${padding})">
+    ${qrSvg}
+  </g>
+</svg>`;
+        return finalSvg;
+      }
+
+      return `<?xml version="1.0" standalone="no"?>\n${qrSvg}`;
+    }
+
     const qrBuffer = await this.generateQR(content, customization);
 
     switch (format) {
-      case 'svg':
-        return await QRCode.toString(content, {
-          type: 'svg',
-          color: {
-            dark: customization.foregroundColor || '#000000',
-            light: customization.backgroundColor || '#FFFFFF'
-          }
-        });
-
       case 'jpeg':
       case 'jpg':
         return await sharp(qrBuffer).jpeg({ quality: 90 }).toBuffer();
-
       case 'webp':
         return await sharp(qrBuffer).webp({ quality: 90 }).toBuffer();
-
       default:
         return qrBuffer;
     }

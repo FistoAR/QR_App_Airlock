@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from '../../components/UI/Toast';
+import { useConfirm } from '../../components/UI/ConfirmDialog';
 
 import {
   FiLink,
@@ -79,6 +80,7 @@ const qrSchema = z.object({
 
 const QRCreator = () => {
   const navigate = useNavigate();
+  const { confirm } = useConfirm();
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedType, setSelectedType] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -139,7 +141,25 @@ const QRCreator = () => {
     setCurrentStep(prev => Math.min(prev + 1, 4));
   };
 
-  const prevStep = () => {
+  const prevStep = async () => {
+    if (currentStep === 2) {
+      // Check if there's any content worth warning about
+      const hasContent = formData.title || (formData.content && Object.keys(formData.content).length > 0);
+      if (hasContent) {
+        const ok = await confirm({
+          title: 'Discard basic information?',
+          message: 'Going back will clear the information you just entered for this QR code type.',
+          confirmText: 'Yes, Discard',
+          cancelText: 'Stay Here',
+          variant: 'danger',
+        });
+        if (!ok) return;
+      }
+      // Clear content when going back from 2 to 1 (changing type)
+      setValue('content', {});
+      setValue('title', '');
+      setSelectedType(null);
+    }
     setCurrentStep(prev => Math.max(prev - 1, 1));
   };
 
@@ -238,6 +258,10 @@ const QRCreator = () => {
                            key={type.id}
                            type="button"
                            onClick={() => handleTypeSelect(type)}
+                           onDoubleClick={() => {
+                             handleTypeSelect(type);
+                             nextStep();
+                           }}
                            className="p-[1.25vw] rounded-[1vw] border-2 text-left transition-all group relative overflow-hidden h-[7vw] flex items-center gap-[1vw]"
                            style={{
                              borderColor: selectedType?.id === type.id ? (type.id === 'url' ? '#3b82f6' : type.id === 'vcard' ? '#10b981' : type.id === 'document' ? '#4f46e5' : '#e11d48') : '#f1f5f9',

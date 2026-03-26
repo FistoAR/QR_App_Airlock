@@ -8,9 +8,9 @@ import {
   FiExternalLink, FiMapPin, FiBarChart2, FiWifi, FiMail,
   FiMessageSquare, FiLink, FiUser, FiFileText, FiUpload, FiList,
   FiToggleLeft, FiToggleRight, FiCalendar, FiTag, FiSave, FiX, FiActivity,
-  FiCheckCircle,
+  FiCheckCircle, FiLock,
 } from 'react-icons/fi';
-import { qrCodeAPI } from '../services/api';
+import { qrCodeAPI, analyticsAPI } from '../services/api';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useForm, FormProvider } from 'react-hook-form';
@@ -199,12 +199,19 @@ const QRCodeDetail = () => {
               </>
             ) : null)
           ) : (
-            <button
-              onClick={() => setIsEditing(true)}
-              className="flex items-center gap-1.5 px-[1vw] py-[0.5vw] bg-blue-600 text-white rounded-lg text-[0.85vw] font-semibold hover:bg-blue-700 transition-all cursor-pointer shadow-md shadow-blue-100"
-            >
-              <FiEdit2 /> {qr.isDynamic ? 'Edit Code' : 'Customize Style'}
-            </button>
+            // Only show Edit button for dynamic QRs
+            qr.isDynamic ? (
+              <button
+                onClick={() => setIsEditing(true)}
+                className="flex items-center gap-1.5 px-[1vw] py-[0.5vw] bg-blue-600 text-white rounded-lg text-[0.85vw] font-semibold hover:bg-blue-700 transition-all cursor-pointer shadow-md shadow-blue-100"
+              >
+                <FiEdit2 /> Edit Code
+              </button>
+            ) : (
+              <div className="flex items-center gap-1.5 px-[1vw] py-[0.45vw] bg-slate-100 text-slate-500 border border-slate-200 rounded-lg text-[0.8vw] font-semibold cursor-not-allowed select-none">
+                <FiLock className="text-[0.9vw]" /> Static QR — Locked
+              </div>
+            )
           )}
           <div className="h-8 w-px bg-slate-200 mx-1" />
           <button onClick={handleDelete} className="p-[0.6vw] text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg cursor-pointer transition-colors">
@@ -241,8 +248,8 @@ const QRCodeDetail = () => {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-[0.4vw]">
-               {['png', 'svg', 'jpeg', 'webp'].map(fmt => (
+            <div className="grid grid-cols-3 gap-[0.4vw]">
+               {['png', 'jpeg', 'webp'].map(fmt => (
                  <button 
                     key={fmt} 
                     onClick={() => handleDownload(fmt)}
@@ -278,11 +285,18 @@ const QRCodeDetail = () => {
             <div className="px-[1.2vw] py-[0.8vw] border-b border-slate-100 bg-slate-50/50 flex-shrink-0">
                 <div className="flex items-center justify-between">
                     <h2 className="text-[0.9vw] font-bold text-slate-800 flex items-center gap-2">
-                        {isEditing ? <FiEdit2 className="text-blue-500" /> : <FiFileText className="text-blue-500" />}
+                        {isEditing ? <FiEdit2 className="text-blue-500" /> : (qr.isDynamic ? <FiFileText className="text-blue-500" /> : <FiLock className="text-amber-500" />)}
                         {isEditing ? 'Editing Mode' : 'Content Details'}
                     </h2>
-                    <div className="px-[0.6vw] py-[0.15vw] bg-blue-100 text-blue-700 rounded-full text-[0.6vw] font-bold uppercase tracking-wider">
-                        {qr.type}
+                    <div className="flex items-center gap-2">
+                        {!qr.isDynamic && (
+                            <div className="px-[0.6vw] py-[0.15vw] bg-amber-100 text-amber-700 rounded-full text-[0.6vw] font-bold uppercase tracking-wider flex items-center gap-1">
+                                <FiLock className="text-[0.65vw]" /> Read Only
+                            </div>
+                        )}
+                        <div className="px-[0.6vw] py-[0.15vw] bg-blue-100 text-blue-700 rounded-full text-[0.6vw] font-bold uppercase tracking-wider">
+                            {qr.type}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -340,69 +354,69 @@ const QRCodeDetail = () => {
                                                     <>
                                                         <div className="col-span-2">
                                                             <label className={labelClass}>Website URL</label>
-                                                            <input type="url" className={inputClass} value={editData.content.target} onChange={e => methods.setValue('content.target', e.target.value)} />
+                                                            <input type="url" readOnly={!qr.isDynamic} className={`${inputClass} ${!qr.isDynamic ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`} value={editData.content.target} onChange={e => methods.setValue('content.target', e.target.value)} />
                                                         </div>
                                                     </>
                                                 )}
                                                 {qr.type === 'vcard' && (
                                                     <>
-                                                        <div className="col-span-2">
+                                                        <div className="col-span-1">
                                                             <label className={labelClass}>Full Name</label>
-                                                            <input type="text" className={inputClass} value={editData.content.firstName} onChange={e => methods.setValue('content.firstName', e.target.value)} />
+                                                            <input type="text" readOnly={!qr.isDynamic} className={`${inputClass} ${!qr.isDynamic ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`} value={editData.content.firstName} onChange={e => methods.setValue('content.firstName', e.target.value)} />
                                                         </div>
                                                         <div className="col-span-1">
                                                             <label className={labelClass}>Job Title</label>
-                                                            <input type="text" className={inputClass} value={editData.content.title} onChange={e => methods.setValue('content.title', e.target.value)} />
+                                                            <input type="text" readOnly={!qr.isDynamic} className={`${inputClass} ${!qr.isDynamic ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`} value={editData.content.title} onChange={e => methods.setValue('content.title', e.target.value)} />
                                                         </div>
                                                         <div className="col-span-1">
                                                             <label className={labelClass}>Organization</label>
-                                                            <input type="text" className={inputClass} value={editData.content.organization} onChange={e => methods.setValue('content.organization', e.target.value)} />
+                                                            <input type="text" readOnly={!qr.isDynamic} className={`${inputClass} ${!qr.isDynamic ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`} value={editData.content.organization} onChange={e => methods.setValue('content.organization', e.target.value)} />
                                                         </div>
                                                         <div className="col-span-1">
                                                             <label className={labelClass}>Mobile Number</label>
-                                                            <input type="tel" className={inputClass} value={editData.content.mobile} onChange={e => methods.setValue('content.mobile', e.target.value)} />
+                                                            <input type="tel" readOnly={!qr.isDynamic} className={`${inputClass} ${!qr.isDynamic ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`} value={editData.content.mobile} onChange={e => methods.setValue('content.mobile', e.target.value)} />
                                                         </div>
                                                         <div className="col-span-1">
                                                             <label className={labelClass}>Office Phone</label>
-                                                            <input type="tel" className={inputClass} value={editData.content.phone} onChange={e => methods.setValue('content.phone', e.target.value)} />
+                                                            <input type="tel" readOnly={!qr.isDynamic} className={`${inputClass} ${!qr.isDynamic ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`} value={editData.content.phone} onChange={e => methods.setValue('content.phone', e.target.value)} />
                                                         </div>
                                                         <div className="col-span-2">
                                                             <label className={labelClass}>Email Address</label>
-                                                            <input type="email" className={inputClass} value={editData.content.email} onChange={e => methods.setValue('content.email', e.target.value)} />
+                                                            <input type="email" readOnly={!qr.isDynamic} className={`${inputClass} ${!qr.isDynamic ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`} value={editData.content.email} onChange={e => methods.setValue('content.email', e.target.value)} />
                                                         </div>
                                                         <div className="col-span-1">
                                                             <label className={labelClass}>Website</label>
-                                                            <input type="url" className={inputClass} value={editData.content.website} onChange={e => methods.setValue('content.website', e.target.value)} />
+                                                            <input type="url" readOnly={!qr.isDynamic} className={`${inputClass} ${!qr.isDynamic ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`} value={editData.content.website} onChange={e => methods.setValue('content.website', e.target.value)} />
                                                         </div>
                                                         <div className="col-span-1">
                                                             <label className={labelClass}>LinkedIn Profile</label>
-                                                            <input type="url" className={inputClass} value={editData.content.linkedin} onChange={e => methods.setValue('content.linkedin', e.target.value)} />
+                                                            <input type="url" readOnly={!qr.isDynamic} className={`${inputClass} ${!qr.isDynamic ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`} value={editData.content.linkedin} onChange={e => methods.setValue('content.linkedin', e.target.value)} />
                                                         </div>
                                                         <div className="col-span-2">
                                                             <label className={labelClass}>Address</label>
-                                                            <textarea className={`${inputClass} h-[3vw] resize-none`} value={typeof editData.content.address === 'object' ? editData.content.address?.street : editData.content.address} onChange={e => methods.setValue('content.address.street', e.target.value)} />
+                                                            <textarea readOnly={!qr.isDynamic} className={`${inputClass} h-[3vw] resize-none ${!qr.isDynamic ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`} value={typeof editData.content.address === 'object' ? editData.content.address?.street : editData.content.address} onChange={e => methods.setValue('content.address.street', e.target.value)} />
                                                         </div>
                                                     </>
                                                 )}
                                                 {qr.type === 'text' && (
                                                     <div className="col-span-2">
                                                         <label className={labelClass}>Text Content</label>
-                                                        <textarea className={`${inputClass} h-[8vw] resize-none`} value={editData.content.content} onChange={e => methods.setValue('content.content', e.target.value)} />
+                                                        <textarea readOnly={!qr.isDynamic} className={`${inputClass} h-[8vw] resize-none ${!qr.isDynamic ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`} value={editData.content.content} onChange={e => methods.setValue('content.content', e.target.value)} />
                                                     </div>
                                                 )}
                                                 {qr.type === 'email' && (
                                                     <>
                                                         <div className="col-span-2">
                                                             <label className={labelClass}>Email Address</label>
-                                                            <input type="email" className={inputClass} value={editData.content.address || editData.content.email || editData.content.to || ''} onChange={e => methods.setValue('content.address', e.target.value)} />
+                                                            <input type="email" readOnly={!qr.isDynamic} className={`${inputClass} ${!qr.isDynamic ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`} value={editData.content.address || editData.content.email || editData.content.to || ''} onChange={e => methods.setValue('content.address', e.target.value)} />
                                                         </div>
                                                         <div className="col-span-2">
                                                             <label className={labelClass}>Subject</label>
-                                                            <input type="text" className={inputClass} value={editData.content.subject} onChange={e => methods.setValue('content.subject', e.target.value)} />
+                                                            <input type="text" readOnly={!qr.isDynamic} className={`${inputClass} ${!qr.isDynamic ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`} value={editData.content.subject} onChange={e => methods.setValue('content.subject', e.target.value)} />
                                                         </div>
                                                         <div className="col-span-2">
                                                             <label className={labelClass}>Message Body</label>
-                                                            <textarea className={`${inputClass} h-[5vw] resize-none`} value={editData.content.body} onChange={e => methods.setValue('content.body', e.target.value)} />
+                                                            <textarea readOnly={!qr.isDynamic} className={`${inputClass} h-[5vw] resize-none ${!qr.isDynamic ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`} value={editData.content.body} onChange={e => methods.setValue('content.body', e.target.value)} />
                                                         </div>
                                                     </>
                                                 )}
@@ -410,11 +424,11 @@ const QRCodeDetail = () => {
                                                     <>
                                                         <div className="col-span-2">
                                                             <label className={labelClass}>Phone Number</label>
-                                                            <input type="tel" className={inputClass} value={editData.content.phone} onChange={e => methods.setValue('content.phone', e.target.value)} />
+                                                            <input type="tel" readOnly={!qr.isDynamic} className={`${inputClass} ${!qr.isDynamic ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`} value={editData.content.phone} onChange={e => methods.setValue('content.phone', e.target.value)} />
                                                         </div>
                                                         <div className="col-span-2">
                                                             <label className={labelClass}>Message</label>
-                                                            <textarea className={`${inputClass} h-[5vw] resize-none`} value={editData.content.message} onChange={e => methods.setValue('content.message', e.target.value)} />
+                                                            <textarea readOnly={!qr.isDynamic} className={`${inputClass} h-[5vw] resize-none ${!qr.isDynamic ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`} value={editData.content.message} onChange={e => methods.setValue('content.message', e.target.value)} />
                                                         </div>
                                                     </>
                                                 )}
@@ -422,15 +436,15 @@ const QRCodeDetail = () => {
                                                     <>
                                                         <div className="col-span-1">
                                                             <label className={labelClass}>Network SSID</label>
-                                                            <input type="text" className={inputClass} value={editData.content.ssid} onChange={e => methods.setValue('content.ssid', e.target.value)} />
+                                                            <input type="text" readOnly={!qr.isDynamic} className={`${inputClass} ${!qr.isDynamic ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`} value={editData.content.ssid} onChange={e => methods.setValue('content.ssid', e.target.value)} />
                                                         </div>
                                                         <div className="col-span-1">
                                                             <label className={labelClass}>Password</label>
-                                                            <input type="password" className={inputClass} value={editData.content.password} onChange={e => methods.setValue('content.password', e.target.value)} />
+                                                            <input type="password" readOnly={!qr.isDynamic} className={`${inputClass} ${!qr.isDynamic ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`} value={editData.content.password} onChange={e => methods.setValue('content.password', e.target.value)} />
                                                         </div>
                                                         <div className="col-span-1">
                                                             <label className={labelClass}>Security Type</label>
-                                                            <select className={inputClass} value={editData.content.encryption} onChange={e => methods.setValue('content.encryption', e.target.value)}>
+                                                            <select disabled={!qr.isDynamic} className={`${inputClass} ${!qr.isDynamic ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`} value={editData.content.encryption} onChange={e => methods.setValue('content.encryption', e.target.value)}>
                                                                 <option value="WPA">WPA/WPA2</option>
                                                                 <option value="WEP">WEP</option>
                                                                 <option value="nopass">No Password</option>
@@ -440,6 +454,7 @@ const QRCodeDetail = () => {
                                                             <label className="flex items-center gap-2 cursor-pointer">
                                                                 <input 
                                                                     type="checkbox" 
+                                                                    disabled={!qr.isDynamic}
                                                                     checked={editData.content.hidden} 
                                                                     onChange={e => methods.setValue('content.hidden', e.target.checked)} 
                                                                 />
@@ -452,15 +467,15 @@ const QRCodeDetail = () => {
                                                     <>
                                                         <div className="col-span-2">
                                                             <label className={labelClass}>Address or Search Term</label>
-                                                            <textarea className={`${inputClass} h-[4vw] resize-none`} value={editData.content.address} onChange={e => methods.setValue('content.address', e.target.value)} />
+                                                            <textarea readOnly={!qr.isDynamic} className={`${inputClass} h-[4vw] resize-none ${!qr.isDynamic ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`} value={editData.content.address} onChange={e => methods.setValue('content.address', e.target.value)} />
                                                         </div>
                                                         <div className="col-span-1">
                                                             <label className={labelClass}>Postal Code (Optional)</label>
-                                                            <input type="text" className={inputClass} value={editData.content.postalCode} onChange={e => methods.setValue('content.postalCode', e.target.value)} />
+                                                            <input type="text" readOnly={!qr.isDynamic} className={`${inputClass} ${!qr.isDynamic ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`} value={editData.content.postalCode} onChange={e => methods.setValue('content.postalCode', e.target.value)} />
                                                         </div>
                                                         <div className="col-span-1">
                                                             <label className={labelClass}>Location Name (Optional)</label>
-                                                            <input type="text" className={inputClass} value={editData.content.name} onChange={e => methods.setValue('content.name', e.target.value)} />
+                                                            <input type="text" readOnly={!qr.isDynamic} className={`${inputClass} ${!qr.isDynamic ? 'opacity-70 cursor-not-allowed bg-slate-100' : ''}`} value={editData.content.name} onChange={e => methods.setValue('content.name', e.target.value)} />
                                                         </div>
                                                     </>
                                                 )}

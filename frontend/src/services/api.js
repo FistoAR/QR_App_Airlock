@@ -46,7 +46,7 @@ export const qrCodeAPI = {
       params: { format, size },
       responseType: 'blob'
     }),
-  duplicate: (id) => api.post(`/qrcodes/${id}/duplicate`),
+  duplicate: (id, data) => api.post(`/qrcodes/${id}/duplicate`, data),
 };
 
 // Content API
