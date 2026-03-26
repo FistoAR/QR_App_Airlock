@@ -148,8 +148,13 @@ export const proxyImage = (req, res, next) => {
     }
 
     const client = url.startsWith('https') ? https : http;
-    
-    client.get(url, (response) => {
+    const options = {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    };
+
+    client.get(url, options, (response) => {
       // Basic validation
       if (response.statusCode >= 400) {
         return res.status(response.statusCode).send('Source image error');

@@ -446,7 +446,7 @@ const QRCustomizer = () => {
                     src={
                       customization.logo.url?.startsWith('data:') || customization.logo.url?.startsWith('http')
                         ? customization.logo.url
-                        : `${import.meta.env.VITE_BACKEND_URL || (import.meta.env.VITE_API_URL || 'http://localhost:4001/api').replace('/api', '')}${customization.logo.url}`
+                        : `${(import.meta.env.VITE_BACKEND_URL || (import.meta.env.VITE_API_URL || 'http://localhost:4001/api').replace('/api', '')).replace(/\/$/, '')}/${customization.logo.url.replace(/^\//, '')}`
                     }
                     alt="Logo"
                     className="max-w-full max-h-full object-contain"

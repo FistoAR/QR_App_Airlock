@@ -97,62 +97,61 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
   }, [type, content]);
 
   // 1. Stable Options to prevent heavy re-renders/blinking
-  const options = useMemo(() => ({
-    width: 1000,
-    height: 1000,
-    type: 'svg',
-    data: previewData,
-    image: logo?.url ? (
-      logo.url.startsWith('data:') 
-        ? logo.url 
-        : `${import.meta.env.VITE_API_URL || 'http://localhost:4001/api'}/content/proxy?url=${encodeURIComponent(
-            logo.url.startsWith('http') 
-              ? logo.url 
-              : `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:4001'}${logo.url}`
-          )}`
-    ) : '',
-    dotsOptions: {
-      color: foregroundColor,
-      type: getDotType(dotStyle)
-    },
-    backgroundOptions: {
-      color: backgroundColor,
-    },
-    cornersSquareOptions: {
-      type: getCornerSquareType(cornerStyle),
-      color: foregroundColor
-    },
-    cornersDotOptions: {
-      type: getCornerDotType(cornerDotStyle),
-      color: foregroundColor
-    },
+  const options = useMemo(() => {
+    // Determine the API base for the proxy
+    let apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
+    
+    // Construct the absolute logo URL for the proxy
+    let sourceLogoUrl = '';
+    if (logo?.url) {
+      if (logo.url.startsWith('data:') || logo.url.startsWith('http')) {
+        sourceLogoUrl = logo.url;
+      } else {
+        const backendBase = (import.meta.env.VITE_BACKEND_URL || (import.meta.env.VITE_API_URL || 'http://localhost:4001/api').replace('/api', '')).replace(/\/$/, '');
+        const cleanPath = logo.url.startsWith('/') ? logo.url.slice(1) : logo.url;
+        sourceLogoUrl = `${backendBase}/${cleanPath}`;
+      }
+    }
 
-    imageOptions: {
-      crossOrigin: "anonymous",
-      margin: 10,
-      imageSize: logo?.size || 0.25
-    },
-    qrOptions: {
-      errorCorrectionLevel: errorCorrectionLevel,
-      typeNumber: 0
-    },
-    margin: margin * 5,
-  }), [previewData, foregroundColor, backgroundColor, dotStyle, cornerStyle, cornerDotStyle, logo?.url, logo?.size, errorCorrectionLevel, margin]);
+    const finalImageUrl = sourceLogoUrl ? (
+      sourceLogoUrl.startsWith('data:') 
+        ? sourceLogoUrl 
+        : `${apiBase.replace(/\/$/, '')}/content/proxy?url=${encodeURIComponent(sourceLogoUrl)}`
+    ) : '';
+
+    return {
+      width: 1000,
+      height: 1000,
+      type: 'svg',
+      data: previewData,
+      image: finalImageUrl,
+      dotsOptions: { color: foregroundColor, type: getDotType(dotStyle) },
+      backgroundOptions: { color: backgroundColor },
+      cornersSquareOptions: { type: getCornerSquareType(cornerStyle), color: foregroundColor },
+      cornersDotOptions: { type: getCornerDotType(cornerDotStyle), color: foregroundColor },
+      imageOptions: {
+        crossOrigin: "anonymous",
+        margin: 10,
+        imageSize: logo?.size || 0.25
+      },
+      qrOptions: { errorCorrectionLevel: errorCorrectionLevel, typeNumber: 0 },
+      margin: margin * 5,
+    };
+  }, [previewData, foregroundColor, backgroundColor, dotStyle, cornerStyle, cornerDotStyle, logo?.url, logo?.size, errorCorrectionLevel, margin]);
 
   useEffect(() => {
     if (!qrRef.current) return;
 
     try {
-      if (!qrCode.current) {
-        qrCode.current = new QRCodeStyling(options);
-        qrCode.current.append(qrRef.current);
-      } else {
-        qrCode.current.update(options);
-      }
+      // If logo changed or first time, clear it to prevent blank state
+      if (qrRef.current) qrRef.current.innerHTML = '';
+      
+      qrCode.current = new QRCodeStyling(options);
+      qrCode.current.append(qrRef.current);
     } catch (err) {
       console.error('QR code styling error:', err);
     }
-  }, [options]); // Initial render and update when options change
+  }, [options]); // Re-create on any options change ensuring fresh render
 
   // 2. Stable Dynamic Styles (Logo Background/Border)
   useEffect(() => {
@@ -167,12 +166,15 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
         
         if (logo?.backgroundColor || logo?.borderColor) {
           let bbox = { x: 0, y: 0, width: 0, height: 0 };
-          try { bbox = img.getBBox(); } catch (e) {
+          try { 
+            // Only try if img is actually in DOM
+            if (img.ownerSVGElement) bbox = img.getBBox(); 
+          } catch (e) {
             bbox = {
-              x: parseFloat(img.getAttribute('x')) || 0,
-              y: parseFloat(img.getAttribute('y')) || 0,
-              width: parseFloat(img.getAttribute('width')) || 0,
-              height: parseFloat(img.getAttribute('height')) || 0
+              x: parseFloat(img.getAttribute('x')) || 400, // Reasonable defaults for 1000x1000
+              y: parseFloat(img.getAttribute('y')) || 400,
+              width: parseFloat(img.getAttribute('width')) || 200,
+              height: parseFloat(img.getAttribute('height')) || 200
             };
           }
           
@@ -186,8 +188,7 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
               img.parentNode.insertBefore(bgRect, img);
             }
             
-            // Backend uses 0.15 margin, syncing here
-            const margin = w * 0.18; // Increased slightly for better "padding" look
+            const margin = w * 0.18;
             bgRect.setAttribute('x', (x - margin/2).toString());
             bgRect.setAttribute('y', (y - margin/2).toString());
             bgRect.setAttribute('width', (w + margin).toString());
@@ -205,9 +206,8 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
       }
     };
 
-    // Ensure styles are applied even after lazy image render
     const timer = setTimeout(updateLogoStyles, 100);
-    const timer2 = setTimeout(updateLogoStyles, 500);
+    const timer2 = setTimeout(updateLogoStyles, 600); // Wait longer for logo to load
     
     return () => {
       clearTimeout(timer);

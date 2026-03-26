@@ -133,7 +133,7 @@ class FileService {
         await client.uploadFrom(stream, fileName);
         console.log(`[FTP] Transfer successful`);
         
-        const storageUrl = (process.env.EXTERNAL_STORAGE_URL || 'http://airlockintl.co.in/qr_app/uploads').replace(/\/$/, '');
+        const storageUrl = (process.env.EXTERNAL_STORAGE_URL || 'https://airlockintl.co.in/qr_app/uploads').replace(/\/$/, '');
         
         return {
           url: `${storageUrl}/${relativePath}`,
@@ -276,7 +276,7 @@ class FileService {
    */
   getFullPath(filePath) {
     if (this.useFtp) {
-      const storageUrl = (process.env.EXTERNAL_STORAGE_URL || 'http://airlockintl.co.in/qr_app/uploads').replace(/\/$/, '');
+      const storageUrl = (process.env.EXTERNAL_STORAGE_URL || 'https://airlockintl.co.in/qr_app/uploads').replace(/\/$/, '');
       return `${storageUrl}/${filePath}`;
     }
     return path.join(this.uploadsDir, filePath);
