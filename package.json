@@ -1,0 +1,13 @@
+{
+  "dependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "scripts": {
+    "dev": "concurrently \"npm run frontend\" \"npm run backend\"",
+    "frontend": "npm --prefix ./frontend run dev",
+    "backend": "nodemon --cwd ./backend server.js"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
