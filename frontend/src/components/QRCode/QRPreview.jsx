@@ -104,8 +104,12 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
     // Construct the absolute logo URL for the proxy
     let sourceLogoUrl = '';
     if (logo?.url) {
-      if (logo.url.startsWith('data:') || logo.url.startsWith('http')) {
-        sourceLogoUrl = logo.url;
+      const secureUrl = logo.url.startsWith('http://') 
+        ? logo.url.replace('http://', 'https://') 
+        : logo.url;
+
+      if (secureUrl.startsWith('data:') || secureUrl.startsWith('http')) {
+        sourceLogoUrl = secureUrl;
       } else {
         const backendBase = (import.meta.env.VITE_BACKEND_URL || (import.meta.env.VITE_API_URL || 'http://localhost:4001/api').replace('/api', '')).replace(/\/$/, '');
         const cleanPath = logo.url.startsWith('/') ? logo.url.slice(1) : logo.url;

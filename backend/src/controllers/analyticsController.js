@@ -1,11 +1,7 @@
 import Scan from '../models/Scan.js';
 import QRCode from '../models/QRCode.js';
 
-/**
- * @desc    Get analytics for QR code
- * @route   GET /api/analytics/:qrCodeId
- * @access  Private
- */
+
 export const getAnalytics = async (req, res, next) => {
   try {
     const { qrCodeId } = req.params;

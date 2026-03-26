@@ -444,9 +444,13 @@ const QRCustomizer = () => {
                 <div className="w-[5vw] h-[5vw] rounded-[0.4vw] border border-slate-200 bg-white flex items-center justify-center placeholder-transparent p-[0.3vw]">
                   <img
                     src={
-                      customization.logo.url?.startsWith('data:') || customization.logo.url?.startsWith('http')
-                        ? customization.logo.url
-                        : `${(import.meta.env.VITE_BACKEND_URL || (import.meta.env.VITE_API_URL || 'http://localhost:4001/api').replace('/api', '')).replace(/\/$/, '')}/${customization.logo.url.replace(/^\//, '')}`
+                      (() => {
+                        if (customization.logo.url?.startsWith('data:')) return customization.logo.url;
+                        let url = customization.logo.url?.startsWith('http')
+                          ? customization.logo.url
+                          : `${(import.meta.env.VITE_BACKEND_URL || (import.meta.env.VITE_API_URL || 'http://localhost:4001/api').replace('/api', '')).replace(/\/$/, '')}/${customization.logo.url.replace(/^\//, '')}`;
+                        return url.replace('http://', 'https://');
+                      })()
                     }
                     alt="Logo"
                     className="max-w-full max-h-full object-contain"
