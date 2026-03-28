@@ -138,7 +138,7 @@ router.get('/:code/download', async (req, res) => {
     // Be extremely flexible about where the file data is stored
     let fileData = null;
     const possibleKeys = [qrCode.type, 'file', 'document', 'media'];
-    
+
     for (const key of possibleKeys) {
       if (contentObj[key] && (contentObj[key].path || contentObj[key].url)) {
         fileData = contentObj[key];
@@ -190,7 +190,7 @@ router.get('/:code/download', async (req, res) => {
       try {
         const remoteRoot = (process.env.FTP_REMOTE_ROOT || 'uploads').replace(/\/$/, '').replace(/^\//, '');
         const remotePath = `${remoteRoot}/${fileData.path.replace(/^\//, '')}`;
-        
+
         console.log(`[FTP-Download] Streaming: ${remotePath}`);
         await client.downloadTo(res, remotePath);
       } finally {
@@ -624,7 +624,7 @@ router.get('/vcard/:code', async (req, res) => {
     vcf += 'END:VCARD';
 
     res.setHeader('Content-Type', 'text/vcard');
-    res.setHeader('Content-Disposition', `attachment; filename="${vc.firstName || 'contact'}.vcf"`);
+    res.setHeader('Content-Disposition', `inline; filename="${vc.firstName || 'contact'}.vcf"`);
     res.send(vcf);
   } catch (error) {
     res.status(500).send('Error');
@@ -676,8 +676,8 @@ router.post('/:code/location', async (req, res) => {
         $set: {
           'location.latitude': latitude,
           'location.longitude': longitude,
-          ...(city        && { 'location.city':        city }),
-          ...(country     && { 'location.country':     country }),
+          ...(city && { 'location.city': city }),
+          ...(country && { 'location.country': country }),
           ...(countryCode && { 'location.countryCode': countryCode }),
         }
       },

@@ -110,11 +110,20 @@ const ScanPage = () => {
     <div className="h-screen bg-gradient-to-b from-slate-50 to-slate-100 overflow-y-auto">
       <div className="max-w-lg mx-auto px-4 py-6 pb-20">
         {renderContent()}
-        
+
         {/* Powered By Footer */}
         <div className="text-center mt-8">
           <p className="text-sm text-slate-400">
-            Powered by <span className="font-semibold" style={{ color: '#2563eb' }}>QR Generator</span>
+            Powered by{" "}
+            <a
+              href="https://www.fist-o.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold"
+              style={{ color: "#2563eb" }}
+            >
+              Fist-o Tech Pvt. Ltd.
+            </a>
           </p>
         </div>
       </div>
@@ -123,29 +132,13 @@ const ScanPage = () => {
 };
 
 // VCard Viewer Component
-const VCardViewer = ({ data }) => {
+const VCardViewer = ({ data, code }) => {
   const downloadVCard = () => {
-    let vcard = 'BEGIN:VCARD\nVERSION:3.0\n';
-    if (data.firstName || data.lastName) {
-      vcard += `FN:${data.firstName || ''} ${data.lastName || ''}\n`;
-    }
-    if (data.email) vcard += `EMAIL;TYPE=INTERNET:${data.email}\n`;
-    if (data.phone) vcard += `TEL;TYPE=WORK,VOICE:${data.phone}\n`;
-    if (data.mobile) vcard += `TEL;TYPE=CELL,VOICE:${data.mobile}\n`;
-    if (data.organization) vcard += `ORG:${data.organization}\n`;
-    if (data.title) vcard += `TITLE:${data.title}\n`;
-    if (data.website) vcard += `URL:${data.website}\n`;
-    if (data.linkedin) vcard += `URL;TYPE=Linkedin:${data.linkedin}\n`;
-    vcard += 'END:VCARD';
-
-
-    const blob = new Blob([vcard], { type: 'text/vcard' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${data.firstName || 'contact'}.vcf`;
-    link.click();
-    URL.revokeObjectURL(url);
+    // Redirect directly to the backend vCard endpoint
+    // This allows the browser to handle the .vcf file natively (inline)
+    // which usually triggers the Contacts app directly without a "download" prompt.
+    const vcfUrl = `${import.meta.env.VITE_BACKEND_URL}/scan/vcard/${code}`;
+    window.location.assign(vcfUrl);
   };
 
   return (
@@ -278,7 +271,7 @@ const FileViewer = ({ data, code }) => (
     </div>
     <h2 className="text-xl font-semibold text-slate-800 mb-2">{data.fileName}</h2>
     <p className="text-slate-500 mb-6">{data.mimeType}</p>
-    
+
     <div className="flex flex-col sm:flex-row gap-3">
       <a
         href={data.url}
@@ -305,7 +298,7 @@ const FileViewer = ({ data, code }) => (
 
 // Multi-Link Viewer Component
 const MultiLinkViewer = ({ data }) => (
-  <div 
+  <div
     className="rounded-2xl shadow-lg p-6"
     style={{ backgroundColor: data.backgroundColor || '#f8fafc' }}
   >
@@ -381,9 +374,9 @@ const ImageViewer = ({ data, code }) => (
         </div>
       </div>
 
-      <img 
-        src={data.url} 
-        alt={data.fileName} 
+      <img
+        src={data.url}
+        alt={data.fileName}
         className="w-full rounded-xl mb-6 shadow-sm ring-1 ring-slate-200 object-contain max-h-[50vh]"
       />
 
@@ -431,9 +424,9 @@ const VideoViewer = ({ data, code }) => (
         </div>
       </div>
 
-      <video 
-        src={data.url} 
-        controls 
+      <video
+        src={data.url}
+        controls
         className="w-full rounded-xl mb-6 shadow-sm ring-1 ring-slate-900/10 bg-black aspect-video"
       />
 
@@ -481,9 +474,9 @@ const AudioViewer = ({ data, code }) => (
         </div>
       </div>
 
-      <audio 
-        src={data.url} 
-        controls 
+      <audio
+        src={data.url}
+        controls
         className="w-full mb-6"
       />
 
