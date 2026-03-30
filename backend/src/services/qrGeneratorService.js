@@ -25,6 +25,11 @@ class QRGeneratorService {
     } = customization;
 
     try {
+      // Check if frame has background - if yes, make QR background transparent
+      const hasFrameBackground = frame && frame.style !== 'none' && frame.backgroundColor;
+      const qrBgColor = hasFrameBackground ? '#FFFFFF' : backgroundColor; // Use white for transparent rendering
+      const shouldMakeQRTransparent = hasFrameBackground;
+
       // Generate base QR code
       const qrOptions = {
         errorCorrectionLevel,
@@ -32,7 +37,7 @@ class QRGeneratorService {
         width,
         color: {
           dark: foregroundColor,
-          light: backgroundColor
+          light: qrBgColor
         }
       };
 
@@ -42,7 +47,7 @@ class QRGeneratorService {
 
       // Apply dot styling if any custom styles are requested
       if (dotStyle !== 'square' || cornerStyle !== 'square' || cornerDotStyle !== 'square') {
-        qrBuffer = await this.applyDotStyle(content, qrOptions, dotStyle, cornerStyle, cornerDotStyle, foregroundColor, backgroundColor);
+        qrBuffer = await this.applyDotStyle(content, qrOptions, dotStyle, cornerStyle, cornerDotStyle, foregroundColor, qrBgColor);
       } else {
         qrBuffer = await QRCode.toBuffer(content, qrOptions);
       }
@@ -54,7 +59,12 @@ class QRGeneratorService {
         if (logoPath.startsWith('/uploads/')) {
           logoPath = fileService.getFullPath(logoPath.replace('/uploads/', ''));
         }
-        qrBuffer = await this.addLogo(qrBuffer, logoPath, logo, backgroundColor);
+        qrBuffer = await this.addLogo(qrBuffer, logoPath, logo, qrBgColor);
+      }
+
+      // Make QR background transparent if frame background exists
+      if (shouldMakeQRTransparent) {
+        qrBuffer = await this.makeBackgroundTransparent(qrBuffer, qrBgColor);
       }
 
       // Add frame if provided
@@ -67,6 +77,52 @@ class QRGeneratorService {
       console.error('QR Generation Error:', error);
       throw new Error('Failed to generate QR code');
     }
+  }
+
+  /**
+   * Make QR code background transparent (remove white background)
+   */
+  async makeBackgroundTransparent(qrBuffer, bgColorToRemove = '#FFFFFF') {
+    const image = sharp(qrBuffer);
+    const metadata = await image.metadata();
+    
+    // Convert to RGBA to support transparency
+    const data = await image
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    const { width, height } = data.info;
+    const pixels = data.data;
+
+    // Parse the color to remove (convert hex to RGB)
+    const hex = bgColorToRemove.replace('#', '');
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+
+    // Iterate through pixels and make matching colors transparent
+    for (let i = 0; i < pixels.length; i += 4) {
+      const pixelR = pixels[i];
+      const pixelG = pixels[i + 1];
+      const pixelB = pixels[i + 2];
+
+      // If pixel matches the background color, make it transparent
+      if (pixelR === r && pixelG === g && pixelB === b) {
+        pixels[i + 3] = 0; // Set alpha to 0 (transparent)
+      }
+    }
+
+    // Convert back to PNG with transparency
+    return sharp(Buffer.from(pixels), {
+      raw: {
+        width,
+        height,
+        channels: 4
+      }
+    })
+    .png()
+    .toBuffer();
   }
 
   /**
@@ -333,46 +389,167 @@ class QRGeneratorService {
    * Add frame around QR code
    */
   async addFrame(qrBuffer, frameConfig) {
-    const { style, text, textColor = '#000000', backgroundColor = '#FFFFFF' } = frameConfig;
+    const { 
+      style, 
+      text, 
+      topText, 
+      bottomText,
+      borderColor = '#000000',
+      backgroundColor = '#FFFFFF' 
+    } = frameConfig;
+
+    // Smart text color: if not explicitly set, use white for banner (dark bars), black for simple/rounded
+    const textColor = frameConfig.textColor 
+      ? frameConfig.textColor 
+      : (style === 'banner' ? '#FFFFFF' : '#000000');
 
     const qrImage = sharp(qrBuffer);
     const metadata = await qrImage.metadata();
     const qrSize = metadata.width;
 
-    const borderWidth = Math.max(8, Math.floor(qrSize * 0.015));
-    const padding = 50;
-    const textAreaHeight = text ? 100 : 0;
+    const borderWidth = Math.max(6, Math.floor(qrSize * 0.012));
+    // Percentage-based padding: 2.5% for banner, 3% for simple/rounded
+    const padding = style === 'banner' 
+      ? Math.floor(qrSize * 0.025) 
+      : Math.floor(qrSize * 0.03);
+    
+    // Frame padding - overall padding around entire image
+    const framePadding = Math.floor(qrSize * 0.04);
+    
+    // --- Pre-calculate text wrapping for simple/rounded ---
+    let lines = [];
+    let textAreaHeight = 0;
+    // Match frontend: responsive font size based on QR
+    const fontSize = Math.max(26, Math.floor(qrSize * 0.06));
+    const lineHeight = fontSize * 1.3;
 
-    const baseSize = qrSize + padding * 2;
-    const canvasW = baseSize;
-    const canvasH = baseSize + textAreaHeight;
+    if (text && (style === 'simple' || style === 'rounded')) {
+      const tempCanvas = createCanvas(100, 100);
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCtx.font = `bold ${fontSize}px Arial, sans-serif`;
+      // Allow full width for text - more generous for text area
+      const maxWidth = qrSize + (padding * 2) - 10;
+      lines = this.wrapTextWithNewlines(tempCtx, text, maxWidth);
+      // Calculate height for text area below QR
+      textAreaHeight = (lines.length * lineHeight) + (padding * 2);
+    }
+
+    // For simple/rounded: canvas has QR centered with padding, then text below
+    const baseSize = qrSize + (padding * 2);
+    let topBarH = 0;
+    let botBarH = 0;
+    let bannerFontBase = 0; // Store for use when drawing bars
+
+    // --- Pre-calculate banner bar heights based on text content ---
+    if (style === 'banner') {
+      const tempC = createCanvas(100, 100);
+      const tempCtx = tempC.getContext('2d');
+      bannerFontBase = Math.max(20, Math.floor(qrSize * 0.052));
+      tempCtx.font = `bold ${bannerFontBase}px Arial, sans-serif`;
+      const maxBannerTextW = qrSize - 15; // Slightly better margin
+
+      if (topText) {
+        const topLines = this.wrapTextWithNewlines(tempCtx, topText, maxBannerTextW);
+        const lineH = bannerFontBase * 1.4;
+        topBarH = Math.max(
+          Math.floor(qrSize * 0.085),
+          Math.ceil(topLines.length * lineH) + bannerFontBase * 0.4
+        );
+      } else {
+        topBarH = Math.floor(qrSize * 0.085);
+      }
+
+      const bText = bottomText || text;
+      if (bText) {
+        const botLines = this.wrapTextWithNewlines(tempCtx, bText, maxBannerTextW);
+        const lineH = bannerFontBase * 1.4;
+        botBarH = Math.max(
+          Math.floor(qrSize * 0.085),
+          Math.ceil(botLines.length * lineH) + bannerFontBase * 0.4
+        );
+      } else {
+        botBarH = Math.floor(qrSize * 0.085);
+      }
+    }
+
+    const canvasW = baseSize + (framePadding * 2);
+    const canvasH = baseSize + textAreaHeight + topBarH + botBarH + (framePadding * 2);
 
     const canvas = createCanvas(canvasW, canvasH);
     const ctx = canvas.getContext('2d');
 
-    // --- Draw background ---
+    // --- Draw background with border radius for entire frame ---
     ctx.fillStyle = backgroundColor;
+    // 'simple' (normal) type gets no border radius; banner and rounded get rounded corners
+    const outerRadius = style === 'simple' ? 0 : Math.floor(Math.min(canvasW, canvasH) * 0.08);
+    
+    // Draw rounded background for entire frame (with frame padding)
+    ctx.beginPath();
+    ctx.moveTo(outerRadius, 0);
+    ctx.lineTo(canvasW - outerRadius, 0);
+    ctx.quadraticCurveTo(canvasW, 0, canvasW, outerRadius);
+    ctx.lineTo(canvasW, canvasH - outerRadius);
+    ctx.quadraticCurveTo(canvasW, canvasH, canvasW - outerRadius, canvasH);
+    ctx.lineTo(outerRadius, canvasH);
+    ctx.quadraticCurveTo(0, canvasH, 0, canvasH - outerRadius);
+    ctx.lineTo(0, outerRadius);
+    ctx.quadraticCurveTo(0, 0, outerRadius, 0);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Draw border around entire frame (with frame padding)
+    ctx.strokeStyle = borderColor;
+    const borderThickness = Math.max(2, Math.floor(qrSize * 0.008));
+    ctx.lineWidth = borderThickness;
+    ctx.beginPath();
+    ctx.moveTo(outerRadius + borderThickness / 2, borderThickness / 2);
+    ctx.lineTo(canvasW - outerRadius - borderThickness / 2, borderThickness / 2);
+    ctx.quadraticCurveTo(canvasW - borderThickness / 2, borderThickness / 2, canvasW - borderThickness / 2, outerRadius + borderThickness / 2);
+    ctx.lineTo(canvasW - borderThickness / 2, canvasH - outerRadius - borderThickness / 2);
+    ctx.quadraticCurveTo(canvasW - borderThickness / 2, canvasH - borderThickness / 2, canvasW - outerRadius - borderThickness / 2, canvasH - borderThickness / 2);
+    ctx.lineTo(outerRadius + borderThickness / 2, canvasH - borderThickness / 2);
+    ctx.quadraticCurveTo(borderThickness / 2, canvasH - borderThickness / 2, borderThickness / 2, canvasH - outerRadius - borderThickness / 2);
+    ctx.lineTo(borderThickness / 2, outerRadius + borderThickness / 2);
+    ctx.quadraticCurveTo(borderThickness / 2, borderThickness / 2, outerRadius + borderThickness / 2, borderThickness / 2);
+    ctx.closePath();
+    ctx.stroke();
+    
+    // Clip to rounded area for content
+    ctx.beginPath();
+    ctx.moveTo(outerRadius, 0);
+    ctx.lineTo(canvasW - outerRadius, 0);
+    ctx.quadraticCurveTo(canvasW, 0, canvasW, outerRadius);
+    ctx.lineTo(canvasW, canvasH - outerRadius);
+    ctx.quadraticCurveTo(canvasW, canvasH, canvasW - outerRadius, canvasH);
+    ctx.lineTo(outerRadius, canvasH);
+    ctx.quadraticCurveTo(0, canvasH, 0, canvasH - outerRadius);
+    ctx.lineTo(0, outerRadius);
+    ctx.quadraticCurveTo(0, 0, outerRadius, 0);
+    ctx.closePath();
+    ctx.clip();
+
+    // --- For Banner: draw bars (plain rectangles, corners handled by frame) ---
+    if (style === 'banner') {
+      ctx.fillStyle = borderColor;
+      // Banner bars extend edge-to-edge for full frame coverage, no padding gaps
+      ctx.fillRect(0, 0, canvasW, topBarH);
+      ctx.fillRect(0, canvasH - botBarH, canvasW, botBarH);
+    }
+
+    // --- Draw the QR code image onto canvas ---
+    const qrX = framePadding + padding; // QR starts after frame padding + internal padding
+    const qrY = framePadding + padding + (style === 'banner' ? topBarH : 0);
+    const qrImg = await loadImage(qrBuffer);
+    ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+
+    // Restore clip after drawing QR (for rounded style)
     if (style === 'rounded') {
-      const radius = canvasW * 0.06;
-      ctx.beginPath();
-      ctx.moveTo(radius, 0);
-      ctx.lineTo(canvasW - radius, 0);
-      ctx.quadraticCurveTo(canvasW, 0, canvasW, radius);
-      ctx.lineTo(canvasW, canvasH - radius);
-      ctx.quadraticCurveTo(canvasW, canvasH, canvasW - radius, canvasH);
-      ctx.lineTo(radius, canvasH);
-      ctx.quadraticCurveTo(0, canvasH, 0, canvasH - radius);
-      ctx.lineTo(0, radius);
-      ctx.quadraticCurveTo(0, 0, radius, 0);
-      ctx.closePath();
-      ctx.fill();
-    } else {
-      ctx.fillRect(0, 0, canvasW, canvasH);
+      ctx.restore();
     }
 
     // --- Draw border for simple and rounded ---
     if (style === 'simple' || style === 'rounded') {
-      ctx.strokeStyle = textColor;
+      ctx.strokeStyle = borderColor;
       ctx.lineWidth = borderWidth;
       const half = borderWidth / 2;
       if (style === 'rounded') {
@@ -394,35 +571,53 @@ class QRGeneratorService {
       }
     }
 
-    // --- Draw the QR code image onto canvas ---
-    const qrX = (canvasW - qrSize) / 2;
-    const qrY = padding;
-    const qrImg = await loadImage(qrBuffer);
-    ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
-
-    // --- Draw text label at bottom ---
-    if (text) {
-      ctx.fillStyle = textColor;
-      const fontSize = Math.max(20, Math.floor(canvasW * 0.042));
-      ctx.font = `bold ${fontSize}px Arial`;
+    // --- Draw text label at bottom (Simple/Rounded) ---
+    if (lines.length > 0 && (style === 'simple' || style === 'rounded')) {
+      // Draw text below QR
+      const textAreaStart = framePadding + padding + qrSize;
+      const textCenterY = textAreaStart + (textAreaHeight / 2);
+      
+      ctx.font = `bold ${fontSize}px Arial, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(text, canvasW / 2, baseSize + textAreaHeight / 2);
+      ctx.fillStyle = textColor;
+      
+      lines.forEach((line, i) => {
+        const yPos = textCenterY + (i - (lines.length - 1) / 2) * lineHeight;
+        ctx.fillText(line, canvasW / 2, yPos);
+      });
     }
 
-    // --- Banner: thick top+bottom bars ---
+    // --- Banner: draw text ON TOP of bars ---
     if (style === 'banner') {
-      const barH = Math.floor(canvasH * 0.1);
+      const bannerFontSize = Math.max(20, Math.floor(qrSize * 0.052));
+      ctx.font = `bold ${bannerFontSize}px Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
       ctx.fillStyle = textColor;
-      ctx.fillRect(0, 0, canvasW, barH);
-      ctx.fillRect(0, canvasH - barH, canvasW, barH);
-      if (text) {
-        ctx.fillStyle = backgroundColor;
-        const fontSize = Math.max(18, Math.floor(barH * 0.5));
-        ctx.font = `bold ${fontSize}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(text, canvasW / 2, canvasH - barH / 2);
+
+      const maxWidth = qrSize - 15;
+      const bannerLineHeight = bannerFontSize * 1.4;
+
+      // Top text — centered vertically inside topBarH
+      if (topText) {
+        const topLines = this.wrapTextWithNewlines(ctx, topText, maxWidth);
+        const topCenterY = topBarH / 2;
+        topLines.forEach((line, i) => {
+          const yOffset = (i - (topLines.length - 1) / 2) * bannerLineHeight;
+          ctx.fillText(line, canvasW / 2, topCenterY + yOffset);
+        });
+      }
+
+      // Bottom text — centered vertically inside botBarH
+      const bText = bottomText || text;
+      if (bText) {
+        const botLines = this.wrapTextWithNewlines(ctx, bText, maxWidth);
+        const botCenterY = canvasH - botBarH / 2;
+        botLines.forEach((line, i) => {
+          const yOffset = (i - (botLines.length - 1) / 2) * bannerLineHeight;
+          ctx.fillText(line, canvasW / 2, botCenterY + yOffset);
+        });
       }
     }
 
@@ -570,7 +765,7 @@ class QRGeneratorService {
           }
         }
       } else {
-        // 2. Direct path or internal reference
+        // 2. Direct path or internal referenc
         const fileName = logoPath.startsWith('/uploads/') ? logoPath.replace('/uploads/', '') : logoPath;
         const fullPath = fileService.getFullPath(fileName);
         
@@ -664,31 +859,63 @@ class QRGeneratorService {
         const totalW = width + padding * 2;
         const totalH = width + padding * 2 + textHeight;
         const fBg = frame.backgroundColor || '#FFFFFF';
-        const fText = frame.textColor || '#000000';
         const fStyle = frame.style;
+        // Smart text color: white for banner (dark bars), black for simple/rounded
+        const fText = frame.textColor 
+          ? frame.textColor 
+          : (fStyle === 'banner' ? '#FFFFFF' : '#000000');
 
         let frameContent = '';
         if (fStyle === 'simple' || fStyle === 'rounded') {
            const radius = fStyle === 'rounded' ? totalW * 0.06 : 0;
            const bW = Math.max(8, width * 0.015);
-           frameContent = `<rect x="${bW/2}" y="${bW/2}" width="${totalW-bW}" height="${totalH-bW}" rx="${radius}" fill="${fBg}" stroke="${fText}" stroke-width="${bW}" />`;
+           const bColor = frame.borderColor || fText;
+           frameContent = `<rect x="${bW/2}" y="${bW/2}" width="${totalW-bW}" height="${totalH-bW}" rx="${radius}" fill="${fBg}" stroke="${bColor}" stroke-width="${bW}" />`;
         } else if (fStyle === 'banner') {
-           const barH = totalH * 0.1;
+           const barH = totalH * 0.12;
+           const bColor = frame.borderColor || fText;
            frameContent = `
              <rect width="${totalW}" height="${totalH}" fill="${fBg}" />
-             <rect width="${totalW}" height="${barH}" fill="${fText}" />
-             <rect y="${totalH - barH}" width="${totalW}" height="${barH}" fill="${fText}" />
+             <rect width="${totalW}" height="${barH}" fill="${bColor}" />
+             <rect y="${totalH - barH}" width="${totalW}" height="${barH}" fill="${bColor}" />
            `;
+           
+           const fontSize = Math.floor(barH * 0.45);
+           // Add Top Text
+           if (frame.topText) {
+             frameContent += `<text x="${totalW/2}" y="${barH/2}" font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="900" text-anchor="middle" dominant-baseline="middle" fill="${fText}">${frame.topText}</text>`;
+           }
+           // Add Bottom Text
+           const bText = frame.bottomText || frame.text;
+           if (bText) {
+             frameContent += `<text x="${totalW/2}" y="${totalH - barH/2}" font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="900" text-anchor="middle" dominant-baseline="middle" fill="${fText}">${bText}</text>`;
+           }
         } else {
            frameContent = `<rect width="${totalW}" height="${totalH}" fill="${fBg}" />`;
         }
 
-        // Add Text
-        if (frame.text) {
-          const fontSize = Math.floor(width * 0.06);
-          const ty = fStyle === 'banner' ? (totalH - (totalH * 0.1)/2) : (totalH - textHeight/2 - padding/2);
-          const tColor = fStyle === 'banner' ? fBg : fText;
-          frameContent += `<text x="${totalW/2}" y="${ty}" font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="900" text-anchor="middle" dominant-baseline="middle" fill="${tColor}">${frame.text}</text>`;
+        // Add Text for simple/rounded with basic SVG wrapping support
+        if (frame.text && (fStyle === 'simple' || fStyle === 'rounded')) {
+          const fontSize = Math.floor(width * 0.05);
+          const lines = frame.text.split(' '); // Simple wrapping for SVG
+          const chunkedLines = [];
+          let current = '';
+          lines.forEach(word => {
+            if ((current + word).length > 20) {
+              chunkedLines.push(current.trim());
+              current = word + ' ';
+            } else {
+              current += word + ' ';
+            }
+          });
+          chunkedLines.push(current.trim());
+
+          const startTy = totalH - textHeight/1.5 - padding/2;
+          frameContent += `<text x="${totalW/2}" y="${startTy}" font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="900" text-anchor="middle" fill="${fText}">`;
+          chunkedLines.forEach((line, i) => {
+            frameContent += `<tspan x="${totalW/2}" dy="${i === 0 ? 0 : fontSize * 1.2}">${line}</tspan>`;
+          });
+          frameContent += `</text>`;
         }
 
         const finalSvg = `<?xml version="1.0" standalone="no"?>
@@ -715,6 +942,68 @@ class QRGeneratorService {
       default:
         return qrBuffer;
     }
+  }
+
+  /**
+   * Helper to wrap text into multiple lines, respecting newlines
+   */
+  wrapTextWithNewlines(ctx, text, maxWidth) {
+    if (!text) return [];
+    
+    // First split by newlines to preserve explicit line breaks
+    const textLines = text.split('\n');
+    const result = [];
+    
+    // Then apply word wrapping to each line
+    textLines.forEach(line => {
+      if (!line) {
+        result.push(''); // Empty line
+      } else {
+        const words = line.split(' ');
+        let currentLine = words[0] || '';
+        
+        for (let i = 1; i < words.length; i++) {
+          const word = words[i];
+          if (!word) continue; // Skip empty words
+          const testLine = currentLine ? currentLine + ' ' + word : word;
+          const width = ctx.measureText(testLine).width;
+          
+          if (width < maxWidth) {
+            currentLine = testLine;
+          } else {
+            if (currentLine) result.push(currentLine);
+            currentLine = word;
+          }
+        }
+        
+        if (currentLine) result.push(currentLine);
+      }
+    });
+    
+    return result;
+  }
+
+  /**
+   * Helper to wrap text into multiple lines for Canvas
+   */
+  wrapText(ctx, text, maxWidth) {
+    if (!text) return [];
+    const words = text.split(' ');
+    const lines = [];
+    let currentLine = words[0];
+
+    for (let i = 1; i < words.length; i++) {
+        const word = words[i];
+        const width = ctx.measureText(currentLine + " " + word).width;
+        if (width < maxWidth) {
+            currentLine += " " + word;
+        } else {
+            lines.push(currentLine);
+            currentLine = word;
+        }
+    }
+    lines.push(currentLine);
+    return lines;
   }
 }
 

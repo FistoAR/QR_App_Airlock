@@ -91,22 +91,28 @@ const qrCodeSchema = new mongoose.Schema({
         default: '#E2E8F0'
       }
     },
-    frame: {
-      style: {
-        type: String,
-        enum: ['none', 'simple', 'rounded', 'banner'],
-        default: 'none'
-      },
-      text: String,
-      textColor: {
-        type: String,
-        default: '#000000'
-      },
-      backgroundColor: {
-        type: String,
-        default: '#FFFFFF'
+      frame: {
+        style: {
+          type: String,
+          enum: ['none', 'simple', 'rounded', 'banner'],
+          default: 'none'
+        },
+        text: String,
+        topText: String,
+        bottomText: String,
+        textColor: {
+          type: String,
+          default: '#000000'
+        },
+        borderColor: {
+          type: String,
+          default: '#000000'
+        },
+        backgroundColor: {
+          type: String,
+          default: '#FFFFFF'
+        }
       }
-    }
   },
   qrImageUrl: String,
   qrImagePath: String,
