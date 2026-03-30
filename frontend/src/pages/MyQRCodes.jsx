@@ -121,9 +121,17 @@ const QRCodeCard = React.memo(React.forwardRef(({
             className="w-[1vw] h-[1vw] rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
         </div>
         <Link to={`/qrcodes/${qr._id}`} className="shrink-0 relative">
-          <div className="w-[3.5vw] h-[3.5vw] bg-slate-50 rounded-[0.3vw] p-[0.3vw] flex items-center justify-center">
+          <div className={`w-[3.5vw] h-[3.5vw] bg-slate-50 p-[0.2vw] flex items-center justify-center ${
+            qr.customization?.frame?.style === 'banner' ? 'rounded-[8px]' :
+            qr.customization?.frame?.style === 'rounded' ? 'rounded-[8px]' :
+            qr.customization?.frame?.style === 'simple' ? 'rounded-[4px]' : 'rounded-[8px]'
+          }`}>
             {(imgSrc && !imgError)
-              ? <img src={imgSrc} alt={qr.title} className="w-full h-full object-contain" onError={() => setImgError(true)} />
+              ? <img src={imgSrc} alt={qr.title} className={`w-full h-full object-contain ${
+                  qr.customization?.frame?.style === 'banner' ? 'rounded-[6px]' :
+                  qr.customization?.frame?.style === 'rounded' ? 'rounded-[6px]' :
+                  qr.customization?.frame?.style === 'simple' ? 'rounded-[2px]' : 'rounded-[6px]'
+                }`} onError={() => setImgError(true)} />
               : <QRPlaceholder size="100%" />}
           </div>
           {isDuplicating && (
@@ -200,9 +208,9 @@ const QRCodeCard = React.memo(React.forwardRef(({
           className="w-[1vw] h-[1vw] rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer opacity-0 group-hover:opacity-100 checked:opacity-100 transition-opacity" />
       </div>
       <Link to={`/qrcodes/${qr._id}`} className="block">
-        <div className="aspect-square bg-slate-50 p-[1vw] flex items-center justify-center relative">
+        <div className={`aspect-square bg-slate-50 p-[0.5vw] flex items-center justify-center  relative `}>
           {(imgSrc && !imgError)
-            ? <img src={imgSrc} alt={qr.title} className="w-full h-full object-contain group-hover:scale-105 transition-transform" onError={() => setImgError(true)} />
+            ? <img src={imgSrc} alt={qr.title} className={`w-full h-full object-contain group-hover:scale-105 transition-transform `} onError={() => setImgError(true)} />
             : <div className="flex flex-col items-center justify-center gap-[0.5vw]">
                 <QRPlaceholder size="60%" />
                 <span className="text-[0.6vw] text-slate-400 font-medium">Not Available</span>

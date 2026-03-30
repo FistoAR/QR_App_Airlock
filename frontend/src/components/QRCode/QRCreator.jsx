@@ -72,8 +72,11 @@ const qrSchema = z.object({
     frame: z.object({
       style: z.string(),
       text: z.string().optional(),
-      textColor: z.string(),
-      backgroundColor: z.string(),
+      topText: z.string().optional(),
+      bottomText: z.string().optional(),
+      textColor: z.string().optional(),
+      borderColor: z.string().optional(),
+      backgroundColor: z.string().optional(),
     }).optional(),
   }),
 });
@@ -101,7 +104,7 @@ const QRCreator = () => {
         errorCorrectionLevel: 'H',
         margin: 4,
         logo: { url: '', size: 0.25, backgroundColor: '#FFFFFF', borderColor: '#E2E8F0' },
-        frame: { style: 'none', text: '', textColor: '#000000', backgroundColor: '#FFFFFF' },
+        frame: { style: 'none', text: '', topText: '', bottomText: '', textColor: '#FFFFFF', borderColor: '#000000', backgroundColor: '#FFFFFF' },
       },
 
     },

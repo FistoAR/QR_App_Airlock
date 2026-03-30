@@ -228,7 +228,7 @@ const QRCodeDetail = () => {
           <div className="bg-white rounded-[0.8vw] border border-slate-200 p-[0.6vw] shadow-sm ">
             <div className="bg-slate-50 rounded-[0.6vw] aspect-square w-[90%] mx-auto flex items-center justify-center mb-[0.4vw] relative group overflow-hidden">
               {isEditing ? (
-                <div className="bg-white p-[0.4vw] rounded-[0.4vw] w-full flex items-center justify-center">
+                <div className="bg-white p-[0.3vw] rounded-[0.4vw] w-full flex items-center justify-center">
                   <QRPreview 
                     customization={{...editData.customization, previewSize: '100%'}} 
                     content={editData.content} 
@@ -237,7 +237,11 @@ const QRCodeDetail = () => {
                   />
                 </div>
               ) : imgSrc ? (
-                <img src={imgSrc} alt="QR Preview" className="w-full h-full object-contain p-[0.75vw]" />
+                <img src={imgSrc} alt="QR Preview" className={`w-full h-full object-contain p-[0.3vw] ${
+                  qr.customization?.frame?.style === 'banner' ? 'rounded-[12px]' : 
+                  qr.customization?.frame?.style === 'rounded' ? 'rounded-[12px]' :
+                  qr.customization?.frame?.style === 'simple' ? 'rounded-[6px]' : 'rounded-[0.4vw]'
+                }`} />
               ) : (
                 <TypeIcon className="text-[3vw] text-slate-200" />
               )}

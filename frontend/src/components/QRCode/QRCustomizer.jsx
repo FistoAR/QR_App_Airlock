@@ -599,7 +599,17 @@ const QRCustomizer = () => {
             <button
               key={style.id}
               type="button"
-              onClick={() => updateNestedCustomization('frame', 'style', style.id)}
+              onClick={() => {
+                updateNestedCustomization('frame', 'style', style.id);
+                // Auto-set smart default text color based on frame style
+                if (style.id === 'banner') {
+                  // Banner has dark bars — white text is readable
+                  updateNestedCustomization('frame', 'textColor', '#FFFFFF');
+                } else if (style.id === 'simple' || style.id === 'rounded') {
+                  // Simple/Rounded have white background — black text is readable
+                  updateNestedCustomization('frame', 'textColor', '#000000');
+                }
+              }}
               className="p-[0.6vw] rounded-[0.4vw] border-2 text-center transition-all text-[0.75vw]"
               style={{
                 borderColor: customization.frame?.style === style.id ? '#3b82f6' : '#e5e7eb',
@@ -615,23 +625,65 @@ const QRCustomizer = () => {
         {customization.frame?.style && customization.frame.style !== 'none' && (
           <div className="space-y-[0.75vw] pt-[0.75vw] border-t border-slate-200">
             <div>
-              <label className="block text-[0.75vw] font-medium text-slate-600 mb-[0.3vw]">
-                Frame Text
-              </label>
-              <input
-                type="text"
-                value={customization.frame?.text || ''}
-                onChange={(e) => updateNestedCustomization('frame', 'text', e.target.value)}
-                placeholder="Scan Me!"
-                className="w-full px-[0.6vw] py-[0.5vw] text-[0.8vw] border border-slate-200 rounded-[0.3vw] focus:outline-none"
-                style={{ '--tw-ring-color': '#2563eb' }}
-              />
+            {customization.frame?.style === 'banner' ? (
+              <div className="space-y-[0.6vw]">
+                <div>
+                  <label className="block text-[0.75vw] font-medium text-slate-600 mb-[0.3vw]">
+                    Top Label
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={customization.frame?.topText || ''}
+                    onChange={(e) => updateNestedCustomization('frame', 'topText', e.target.value)}
+                    placeholder="SCAN ME"
+                    className="w-full px-[0.6vw] py-[0.5vw] text-[0.8vw] border border-slate-200 rounded-[0.3vw] focus:outline-none focus:border-blue-400 resize-none leading-snug"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[0.75vw] font-medium text-slate-600 mb-[0.3vw]">
+                    Bottom Label
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={customization.frame?.bottomText || customization.frame?.text || ''}
+                    onChange={(e) => updateNestedCustomization('frame', 'bottomText', e.target.value)}
+                    placeholder="VISIT US"
+                    className="w-full px-[0.6vw] py-[0.5vw] text-[0.8vw] border border-slate-200 rounded-[0.3vw] focus:outline-none focus:border-blue-400 resize-none leading-snug"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-[0.75vw] font-medium text-slate-600 mb-[0.3vw]">
+                  Frame Text
+                </label>
+                <textarea
+                  rows={3}
+                  value={customization.frame?.text || ''}
+                  onChange={(e) => updateNestedCustomization('frame', 'text', e.target.value)}
+                  placeholder="Scan Me!"
+                  className="w-full px-[0.6vw] py-[0.5vw] text-[0.8vw] border border-slate-200 rounded-[0.3vw] focus:outline-none focus:border-blue-400 resize-none"
+                />
+              </div>
+            )}
             </div>
             
             <div className="grid grid-cols-2 gap-[0.75vw]">
               <ColorPickerPopover
                 colorKey="textColor"
                 label="Text Color"
+                nested={true}
+                parentKey="frame"
+                customization={customization}
+                activeColorPicker={activeColorPicker}
+                setActiveColorPicker={setActiveColorPicker}
+                updateCustomization={updateCustomization}
+                updateNestedCustomization={updateNestedCustomization}
+                pickerRef={pickerRef}
+              />
+              <ColorPickerPopover
+                colorKey="borderColor"
+                label="Frame Border"
                 nested={true}
                 parentKey="frame"
                 customization={customization}

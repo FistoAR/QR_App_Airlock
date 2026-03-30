@@ -133,12 +133,35 @@ const ScanPage = () => {
 
 // VCard Viewer Component
 const VCardViewer = ({ data, code }) => {
-  const downloadVCard = () => {
-    // Redirect directly to the backend vCard endpoint
-    // This allows the browser to handle the .vcf file natively (inline)
-    // which usually triggers the Contacts app directly without a "download" prompt.
-    const vcfUrl = `${import.meta.env.VITE_BACKEND_URL}/scan/vcard/${code}`;
-    window.location.assign(vcfUrl);
+  const addContact = () => {
+    // Generate VCF content client-side
+    let vcf = 'BEGIN:VCARD\nVERSION:3.0\n';
+    vcf += `FN:${data.firstName || ''} ${data.lastName || ''}\n`;
+    vcf += `N:${data.lastName || ''};${data.firstName || ''};;;\n`;
+    if (data.organization) vcf += `ORG:${data.organization}\n`;
+    if (data.title) vcf += `TITLE:${data.title}\n`;
+    if (data.email) vcf += `EMAIL;TYPE=INTERNET:${data.email}\n`;
+    if (data.phone) vcf += `TEL;TYPE=VOICE:${data.phone}\n`;
+    if (data.mobile) vcf += `TEL;TYPE=CELL,VOICE:${data.mobile}\n`;
+    if (data.website) vcf += `URL:${data.website}\n`;
+    if (data.linkedin) {
+      vcf += `X-SOCIALPROFILE;TYPE=linkedin:${data.linkedin}\n`;
+      vcf += `X-LINKEDIN:${data.linkedin}\n`;
+      vcf += `URL;TYPE=WORK:${data.linkedin}\n`;
+    }
+    if (data.address?.street) {
+      vcf += `ADR;TYPE=WORK,POSTAL,PARCEL:;;${data.address.street};${data.address.city || ''};${data.address.state || ''};${data.address.zip || ''};${data.address.country || ''}\n`;
+    }
+    vcf += 'END:VCARD';
+
+    // Encode vCard data as base64 data URL
+    // This triggers native contact handler on mobile without downloading
+    const encodedVCard = encodeURI(vcf);
+    const dataUrl = 'data:text/vcard,' + encodedVCard;
+    
+    // On mobile, this will trigger the native contacts app
+    // On desktop, it will open with default vCard application
+    window.location.href = dataUrl;
   };
 
   return (
@@ -239,14 +262,14 @@ const VCardViewer = ({ data, code }) => {
 
         {/* Save Contact Button */}
         <button
-          onClick={downloadVCard}
+          onClick={addContact}
           className="w-full flex items-center justify-center gap-2 py-3 text-white rounded-lg transition-colors font-medium"
           style={{ backgroundColor: '#2563eb' }}
           onMouseEnter={(e) => e.target.style.backgroundColor = '#1d4ed8'}
           onMouseLeave={(e) => e.target.style.backgroundColor = '#2563eb'}
         >
           <FiDownload />
-          Save Contact
+          Add Contact
         </button>
       </div>
     </div>

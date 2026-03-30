@@ -130,7 +130,13 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
       data: previewData,
       image: finalImageUrl,
       dotsOptions: { color: foregroundColor, type: getDotType(dotStyle) },
-      backgroundOptions: { color: backgroundColor },
+      backgroundOptions: { 
+        // When frame has background, make QR transparent (no background fill)
+        // When no frame background, use QR's backgroundColor
+        color: (frame.style && frame.style !== 'none' && frame.backgroundColor) 
+          ? '#00000000' // Transparent - will be removed from SVG
+          : backgroundColor 
+      },
       cornersSquareOptions: { type: getCornerSquareType(cornerStyle), color: foregroundColor },
       cornersDotOptions: { type: getCornerDotType(cornerDotStyle), color: foregroundColor },
       imageOptions: {
@@ -139,9 +145,9 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
         imageSize: logo?.size || 0.25
       },
       qrOptions: { errorCorrectionLevel: errorCorrectionLevel, typeNumber: 0 },
-      margin: margin * 5,
+      margin: 0,
     };
-  }, [previewData, foregroundColor, backgroundColor, dotStyle, cornerStyle, cornerDotStyle, logo?.url, logo?.size, errorCorrectionLevel, margin]);
+  }, [previewData, foregroundColor, backgroundColor, dotStyle, cornerStyle, cornerDotStyle, logo?.url, logo?.size, errorCorrectionLevel, frame.style, frame.backgroundColor]);
 
   useEffect(() => {
     if (!qrRef.current) return;
@@ -157,7 +163,35 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
     }
   }, [options]); // Re-create on any options change ensuring fresh render
 
-  // 2. Stable Dynamic Styles (Logo Background/Border)
+  // 3. Remove QR background rect when frame has background
+  useEffect(() => {
+    if (!qrRef.current) return;
+
+    const svg = qrRef.current?.querySelector('svg');
+    if (!svg) return;
+
+    // Find the background rect (usually the first rect in the SVG)
+    const rects = svg.querySelectorAll('rect');
+    let bgRect = null;
+
+    // The background rect is typically the first element with the backgroundColor
+    if (rects.length > 0) {
+      rects.forEach(rect => {
+        const fill = rect.getAttribute('fill');
+        // Check if this is the background rect (it should be full size or background color)
+        if (fill === backgroundColor || fill === '#00000000') {
+          bgRect = rect;
+        }
+      });
+    }
+
+    // Remove background if frame has background
+    if (frame.style && frame.style !== 'none' && frame.backgroundColor && bgRect) {
+      bgRect.remove();
+    }
+  }, [frame.style, frame.backgroundColor, backgroundColor]);
+
+  // 4. Update logo styles and handle broken images
   useEffect(() => {
     if (disabled || !qrRef.current) return;
 
@@ -167,6 +201,12 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
       
       if (img && logo?.url) {
         img.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+        
+        // Add error handling for broken images
+        img.onerror = () => {
+          console.warn('Logo image failed to load:', logo.url);
+          img.style.opacity = '0.3';
+        };
         
         if (logo?.backgroundColor || logo?.borderColor) {
           let bbox = { x: 0, y: 0, width: 0, height: 0 };
@@ -222,71 +262,75 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
   return (
     <div className="relative flex flex-col items-center">
       <div
-        className="relative rounded-[1vw] qr-preview-container flex items-center justify-center overflow-hidden"
+        className={`relative rounded-[1vw] qr-preview-container overflow-hidden flex flex-col ${frame.style === 'banner' ? 'justify-between' : 'items-center justify-center'}`}
         style={{
           backgroundColor: frame.style && frame.style !== 'none' ? (frame.backgroundColor || '#FFFFFF') : '#FFFFFF',
           width: previewSize,
-          height: previewSize,
+          minHeight: previewSize,
+          height: 'auto',
           transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
           // Frame border styles
           ...(frame.style === 'simple' && {
-            border: `4px solid ${frame.textColor || '#000000'}`,
+            border: `4px solid ${frame.borderColor || '#000000'}`,
             borderRadius: '4px',
           }),
           ...(frame.style === 'rounded' && {
-            border: `4px solid ${frame.textColor || '#000000'}`,
+            border: `4px solid ${frame.borderColor || '#000000'}`,
             borderRadius: '16px',
           }),
           ...(frame.style === 'banner' && {
-            borderTop: `12px solid ${frame.textColor || '#000000'}`,
-            borderBottom: `12px solid ${frame.textColor || '#000000'}`,
-            borderRadius: '4px',
+            border: `1px solid ${frame.borderColor || '#000000'}`,
+            borderRadius: '12px',
           }),
           ...(frame.style && frame.style !== 'none' && { boxShadow: '0 8px 32px rgba(0,0,0,0.15)' }),
         }}
       >
-        <div className="flex flex-col items-center justify-center w-full h-full relative">
-          {/* Frame Top Text (Banner style) */}
-          {frame.style === 'banner' && frame.text && (
-            <div
-              className="absolute top-[0.5vw] left-0 right-0 text-center text-[0.75vw] font-black uppercase tracking-widest z-10"
-              style={{ color: frame.textColor }}
-            >
-              {frame.text}
-            </div>
-          )}
+        {/* Banner Style: Top Bar */}
+        {frame.style === 'banner' && (
+          <div 
+            className="w-full min-h-[2.5vw] z-10 flex items-center justify-center py-[0.5vw] px-[0.8vw] shrink-0 overflow-y-auto"
+            style={{ backgroundColor: frame.borderColor || '#000000' }}
+          >
+            {frame.topText && (
+              <span 
+                className="text-center text-[0.7vw] font-black tracking-widest leading-[1.4] whitespace-pre-wrap break-words" 
+                style={{ color: frame.textColor || '#FFFFFF' }}
+              >
+                {frame.topText}
+              </span>
+            )}
+          </div>
+        )}
 
-          {/* QR Code Container */}
-          <div
-            ref={qrRef}
-            className={`qr-code-wrapper transition-all duration-500 ${disabled ? 'opacity-20 grayscale blur-[2px]' : 'opacity-100'}`}
-            style={{
-              width: frame.style && frame.style !== 'none' ? '82%' : '100%',
-              height: frame.style && frame.style !== 'none' ? '82%' : '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              overflow: 'visible'
-            }}
-          />
-
-          {/* Frame Bottom Text */}
-          {frame.style && frame.style !== 'none' && frame.text && (
+          <div className="flex-1 flex flex-col items-center justify-center w-full min-h-0 relative" style={{ 
+            padding: (frame.style && frame.style !== 'none') ? (frame.style === 'banner' ? '5%' : '6%') : '0',
+          }}>
+            {/* QR Code Container - Fixed aspect ratio to keep size consistent */}
             <div
-              className={`text-center font-black uppercase tracking-widest w-full z-10 
-                ${frame.style === 'banner' ? 'absolute bottom-[0.5vw]' : 'mt-[0.4vw]'}
-              `}
+              ref={qrRef}
+              className={`qr-code-wrapper transition-all duration-500 overflow-visible flex items-center justify-center w-full aspect-square ${disabled ? 'opacity-20 grayscale blur-[2px]' : 'opacity-100'}`}
+              style={{
+                maxWidth: '100%',
+                flexShrink: 0
+              }}
+            />
+
+          {/* Simple/Rounded Frame Bottom Text */}
+          {frame.style && frame.style !== 'none' && frame.style !== 'banner' && frame.text && (
+            <div
+              className="text-center font-black tracking-widest w-full z-10 flex items-center justify-center p-[0.3vw] shrink-0 overflow-y-auto max-h-[4vw]"
               style={{
                 color: frame.textColor || '#000000',
-                fontSize: frame.style === 'banner' ? '0.75vw' : '1vw',
+                fontSize: '0.8vw',
                 fontWeight: '900',
+                lineHeight: '1.4'
               }}
             >
-              {frame.text}
+              <span className="break-words w-full px-[0.5vw] whitespace-pre-wrap">{frame.text}</span>
             </div>
           )}
           
-          {/* Overlay for selection */}
+          {/* Overlay for selection moved inside content area */}
           {disabled && (
             <div className="absolute inset-0 bg-white/95 backdrop-blur-md z-20 flex items-center justify-center p-[2vw] text-center transition-all duration-300">
                 <div className="space-y-[0.75vw] scale-90">
@@ -299,8 +343,24 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
             </div>
           )}
         </div>
-      </div>
 
+        {/* Banner Style: Bottom Bar */}
+        {frame.style === 'banner' && (
+          <div 
+            className="w-full min-h-[2.5vw] z-10 flex items-center justify-center py-[0.5vw] px-[0.8vw] shrink-0 overflow-y-auto"
+            style={{ backgroundColor: frame.borderColor || '#000000' }}
+          >
+            {(frame.bottomText || frame.text) && (
+              <span 
+                className="text-center text-[0.7vw] font-black tracking-widest leading-[1.4] whitespace-pre-wrap break-words" 
+                style={{ color: frame.textColor || '#FFFFFF' }}
+              >
+                {frame.bottomText || frame.text}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
 
       <style dangerouslySetInnerHTML={{
         __html: `

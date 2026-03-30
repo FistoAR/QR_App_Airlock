@@ -52,7 +52,13 @@ class QRGeneratorService {
         qrBuffer = await QRCode.toBuffer(content, qrOptions);
       }
 
-      // Add logo if provided
+      // Make QR background transparent if frame background exists
+      // (must happen BEFORE adding logo so logo's white bg is not erased)
+      if (shouldMakeQRTransparent) {
+        qrBuffer = await this.makeBackgroundTransparent(qrBuffer, qrBgColor);
+      }
+
+      // Add logo if provided (after transparency so its bg survives)
       if (logo && logo.url) {
         // If logo.url is a local path, read from filesystem
         let logoPath = logo.url;
@@ -60,11 +66,6 @@ class QRGeneratorService {
           logoPath = fileService.getFullPath(logoPath.replace('/uploads/', ''));
         }
         qrBuffer = await this.addLogo(qrBuffer, logoPath, logo, qrBgColor);
-      }
-
-      // Make QR background transparent if frame background exists
-      if (shouldMakeQRTransparent) {
-        qrBuffer = await this.makeBackgroundTransparent(qrBuffer, qrBgColor);
       }
 
       // Add frame if provided
@@ -311,7 +312,10 @@ class QRGeneratorService {
     const qrSize = metadata.width;
 
     const logoSizeRatio = typeof logoConfig === 'number' ? logoConfig : (logoConfig.size || 0.25);
-    const logoBgColor = logoConfig.backgroundColor || qrBackgroundColor || '#FFFFFF';
+    // Always use the logo's own backgroundColor; default to white — never inherit frame color
+    const logoBgColor = (logoConfig.backgroundColor && logoConfig.backgroundColor !== 'transparent')
+      ? logoConfig.backgroundColor
+      : '#FFFFFF';
     const logoBorderColor = logoConfig.borderColor || '#E2E8F0';
 
     const logoSize = Math.floor(qrSize * logoSizeRatio);
@@ -362,7 +366,7 @@ class QRGeneratorService {
       <svg width="${containerW}" height="${containerH}">
         <rect x="${borderWidth/2}" y="${borderWidth/2}" width="${containerW-borderWidth}" height="${containerH-borderWidth}" 
               rx="${radius}" ry="${radius}" 
-              fill="${logoBgColor !== 'transparent' ? logoBgColor : '#FFFFFF'}"
+              fill="${logoBgColor}"
               stroke="${logoBorderColor}" stroke-width="${borderWidth}"/>
       </svg>
     `;
