@@ -207,8 +207,23 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
           console.warn('Logo image failed to load:', logo.url);
           img.style.opacity = '0.3';
         };
+
+        // Determine if we need to blend away the logo's white background
+        const hasCustomBg = logo?.backgroundColor 
+          && logo.backgroundColor !== '#FFFFFF' 
+          && logo.backgroundColor !== '#ffffff'
+          && logo.backgroundColor !== 'transparent';
+        const isTransparent = logo?.backgroundColor === 'transparent';
+
+        // Apply mix-blend-mode: multiply so white areas in the logo
+        // take on the background colour instead of staying white
+        if (hasCustomBg) {
+          img.setAttribute('style', 'mix-blend-mode: multiply;');
+        } else {
+          img.removeAttribute('style');
+        }
         
-        if (logo?.backgroundColor || logo?.borderColor) {
+        if ((logo?.backgroundColor && !isTransparent) || logo?.borderColor) {
           let bbox = { x: 0, y: 0, width: 0, height: 0 };
           try { 
             // Only try if img is actually in DOM

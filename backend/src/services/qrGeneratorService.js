@@ -83,7 +83,7 @@ class QRGeneratorService {
   /**
    * Make QR code background transparent (remove white background)
    */
-  async makeBackgroundTransparent(qrBuffer, bgColorToRemove = '#FFFFFF') {
+  async makeBackgroundTransparent(qrBuffer, bgColorToRemove = '#FFFFFF', tolerance = 0) {
     const image = sharp(qrBuffer);
     const metadata = await image.metadata();
     
@@ -108,8 +108,10 @@ class QRGeneratorService {
       const pixelG = pixels[i + 1];
       const pixelB = pixels[i + 2];
 
-      // If pixel matches the background color, make it transparent
-      if (pixelR === r && pixelG === g && pixelB === b) {
+      // If pixel is within tolerance of the target colour, make transparent
+      if (Math.abs(pixelR - r) <= tolerance &&
+          Math.abs(pixelG - g) <= tolerance &&
+          Math.abs(pixelB - b) <= tolerance) {
         pixels[i + 3] = 0; // Set alpha to 0 (transparent)
       }
     }
@@ -312,11 +314,15 @@ class QRGeneratorService {
     const qrSize = metadata.width;
 
     const logoSizeRatio = typeof logoConfig === 'number' ? logoConfig : (logoConfig.size || 0.25);
-    // Always use the logo's own backgroundColor; default to white — never inherit frame color
-    const logoBgColor = (logoConfig.backgroundColor && logoConfig.backgroundColor !== 'transparent')
+    // Use the user's chosen backgroundColor. If explicitly 'transparent', honour it.
+    // Only fall back to white when no backgroundColor is provided at all.
+    const isTransparentBg = logoConfig.backgroundColor === 'transparent';
+    const logoBgColor = logoConfig.backgroundColor && !isTransparentBg
       ? logoConfig.backgroundColor
-      : '#FFFFFF';
-    const logoBorderColor = logoConfig.borderColor || '#E2E8F0';
+      : (isTransparentBg ? 'transparent' : '#FFFFFF');
+    const logoBorderColor = isTransparentBg
+      ? 'none'
+      : (logoConfig.borderColor || '#E2E8F0');
 
     const logoSize = Math.floor(qrSize * logoSizeRatio);
 
@@ -347,13 +353,41 @@ class QRGeneratorService {
       targetW = Math.floor(logoSize * aspectRatio);
     }
 
+    // Use multiply blend when user has set a non-white background.
+    // multiply: white(255) × color = color, so the logo's white bg
+    // naturally becomes the container colour with smooth anti-aliased edges.
+    const needsBlend = !isTransparentBg && logoBgColor !== '#FFFFFF' && logoBgColor !== '#ffffff';
+
     // Process logo
-    const processedLogo = await sharp(logoBuffer)
-      .resize(targetW, targetH, {
-        fit: 'contain',
-        background: { r: 255, g: 255, b: 255, alpha: 0 }
-      })
-      .toBuffer();
+    let processedLogo;
+    if (needsBlend) {
+      // For multiply blending, we need a solid white background
+      processedLogo = await sharp(logoBuffer)
+        .resize(targetW, targetH, {
+          fit: 'contain',
+          background: { r: 255, g: 255, b: 255, alpha: 1 }
+        })
+        .flatten({ background: { r: 255, g: 255, b: 255 } })
+        .toBuffer();
+    } else if (isTransparentBg) {
+      // For transparency, we resize with alpha 0 and then strip white
+      const logoTmp = await sharp(logoBuffer)
+        .resize(targetW, targetH, {
+          fit: 'contain',
+          background: { r: 255, g: 255, b: 255, alpha: 0 }
+        })
+        .ensureAlpha()
+        .toBuffer();
+      processedLogo = await this.makeBackgroundTransparent(logoTmp, '#FFFFFF', 35);
+    } else {
+      // Normal case (white background)
+      processedLogo = await sharp(logoBuffer)
+        .resize(targetW, targetH, {
+          fit: 'contain',
+          background: { r: 255, g: 255, b: 255, alpha: 1 }
+        })
+        .toBuffer();
+    }
 
     // Create a container that fits the logo aspect ratio
     const margin = Math.floor(logoSize * 0.12);
@@ -362,17 +396,23 @@ class QRGeneratorService {
     const radius = Math.floor(Math.min(containerW, containerH) * 0.15);
     const borderWidth = Math.max(2, Math.floor(Math.min(containerW, containerH) * 0.02));
 
+    const svgFill = isTransparentBg ? 'none' : logoBgColor;
+    const svgStroke = isTransparentBg ? 'none' : logoBorderColor;
     const svgContainer = `
-      <svg width="${containerW}" height="${containerH}">
+      <svg width="${containerW}" height="${containerH}" xmlns="http://www.w3.org/2000/svg">
         <rect x="${borderWidth/2}" y="${borderWidth/2}" width="${containerW-borderWidth}" height="${containerH-borderWidth}" 
               rx="${radius}" ry="${radius}" 
-              fill="${logoBgColor}"
-              stroke="${logoBorderColor}" stroke-width="${borderWidth}"/>
+              fill="${svgFill}"
+              stroke="${svgStroke}" stroke-width="${isTransparentBg ? 0 : borderWidth}"/>
       </svg>
     `;
 
     const logoLayer = await sharp(Buffer.from(svgContainer))
-      .composite([{ input: processedLogo, gravity: 'center' }])
+      .composite([{
+        input: processedLogo,
+        gravity: 'center',
+        blend: needsBlend ? 'multiply' : 'over'
+      }])
       .png()
       .toBuffer();
 
