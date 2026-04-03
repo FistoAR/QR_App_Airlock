@@ -227,11 +227,21 @@ class FileService {
       const client = await this.getFtpClient();
       try {
         const remoteRoot = (process.env.FTP_REMOTE_ROOT || 'uploads').replace(/\/$/, '').replace(/^\//, '');
-        const remotePath = `${remoteRoot}/${filePath}`;
-        console.log(`[FTP] Deleting: ${remotePath}`);
+        // Ensure path is properly normalized for FTP (no duplicate slashes, forward slashes)
+        let normalizedPath = filePath.replace(/\\/g, '/').replace(/^\//, '');
+        const remotePath = `${remoteRoot}/${normalizedPath}`;
+        
+        console.log(`[FTP] DELETING FILE: ${remotePath}`);
+        
+        // Try deleting the file
         await client.remove(remotePath);
+        console.log(`[FTP] SUCCESS: Permanently deleted ${remotePath}`);
       } catch (error) {
-        console.error(`[FTP] Delete Error: ${error.message}`);
+        console.error(`[FTP] DELETE FAILED for ${filePath}: ${error.message}`);
+        // If file not found, we don't throw, but log it
+        if (error.code === 550) {
+          console.warn(`[FTP] File already missing or permission denied: ${filePath}`);
+        }
       } finally {
         client.close();
       }

@@ -21,12 +21,12 @@ const URLForm = () => {
             {...register('content.target', {
               required: 'URL is required',
               pattern: {
-                value: /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([\/\w .-]*)*\/?$/,
+                value: /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,63})([\/\w .-]*)*\/?$/i,
                 message: 'Please enter a valid URL'
               }
             })}
-            type="url"
-            placeholder="https://www.company.com"
+            type="text"
+            placeholder="e.g. www.fist-o.com or https://company.com"
             className={inputClass}
           />
           {errors.content?.target && (

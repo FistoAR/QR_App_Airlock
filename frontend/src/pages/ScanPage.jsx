@@ -4,6 +4,22 @@ import { FiUser, FiMail, FiPhone, FiSmartphone, FiGlobe, FiMapPin, FiDownload, F
 
 import api from '../services/api';
 
+const getFileUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('http') || url.startsWith('data:')) return url;
+  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:4001';
+  return `${backendUrl.replace(/\/$/, '')}${url.startsWith('/') ? '' : '/'}${url}`;
+};
+
+const getViewUrl = (url, mimeType) => {
+  const fileUrl = getFileUrl(url);
+  if (mimeType === 'application/pdf') {
+    // Use Google Docs viewer as a proxy for mobile/older Android compatibility
+    return `https://docs.google.com/viewer?url=${encodeURIComponent(fileUrl)}&embedded=true`;
+  }
+  return fileUrl;
+};
+
 const ScanPage = () => {
   const { code } = useParams();
   const [loading, setLoading] = useState(true);
@@ -297,13 +313,13 @@ const FileViewer = ({ data, code }) => (
 
     <div className="flex flex-col sm:flex-row gap-3">
       <a
-        href={data.url}
+        href={getViewUrl(data.url, data.mimeType)}
         target="_blank"
         rel="noopener noreferrer"
         className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-slate-100 text-slate-700 rounded-lg transition-colors font-medium hover:bg-slate-200"
       >
         <FiExternalLink />
-        View Raw
+        View
       </a>
       <a
         href={`${import.meta.env.VITE_BACKEND_URL}/scan/${code}/download`}
@@ -398,7 +414,7 @@ const ImageViewer = ({ data, code }) => (
       </div>
 
       <img
-        src={data.url}
+        src={getFileUrl(data.url)}
         alt={data.fileName}
         className="w-full rounded-xl mb-6 shadow-sm ring-1 ring-slate-200 object-contain max-h-[50vh]"
       />
@@ -410,7 +426,7 @@ const ImageViewer = ({ data, code }) => (
         </div>
         <div className="grid grid-cols-2 gap-3 mt-4">
           <a
-            href={data.url}
+            href={getViewUrl(data.url, data.mimeType)}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center justify-center gap-2 py-3 px-4 bg-slate-100 text-slate-700 rounded-lg transition-colors font-medium hover:bg-slate-200 text-sm"
@@ -448,7 +464,7 @@ const VideoViewer = ({ data, code }) => (
       </div>
 
       <video
-        src={data.url}
+        src={getFileUrl(data.url)}
         controls
         className="w-full rounded-xl mb-6 shadow-sm ring-1 ring-slate-900/10 bg-black aspect-video"
       />
@@ -460,7 +476,7 @@ const VideoViewer = ({ data, code }) => (
         </div>
         <div className="grid grid-cols-2 gap-3 mt-4">
           <a
-            href={data.url}
+            href={getViewUrl(data.url, data.mimeType)}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center justify-center gap-2 py-3 px-4 bg-slate-100 text-slate-700 rounded-lg transition-colors font-medium hover:bg-slate-200 text-sm"
@@ -498,7 +514,7 @@ const AudioViewer = ({ data, code }) => (
       </div>
 
       <audio
-        src={data.url}
+        src={getFileUrl(data.url)}
         controls
         className="w-full mb-6"
       />
@@ -510,7 +526,7 @@ const AudioViewer = ({ data, code }) => (
         </div>
         <div className="grid grid-cols-2 gap-3 mt-4">
           <a
-            href={data.url}
+            href={getViewUrl(data.url, data.mimeType)}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center justify-center gap-2 py-3 px-4 bg-slate-100 text-slate-700 rounded-lg transition-colors font-medium hover:bg-slate-200 text-sm"
@@ -548,7 +564,7 @@ const DocumentViewer = ({ data, code }) => (
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-3 mt-4">
           <a
-            href={data.url}
+            href={getViewUrl(data.url, data.mimeType)}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center justify-center gap-2 py-3 px-4 bg-slate-100 text-slate-700 rounded-lg transition-colors font-medium hover:bg-slate-200 text-sm"

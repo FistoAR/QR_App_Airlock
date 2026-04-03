@@ -740,8 +740,8 @@ class QRGeneratorService {
 
     if (data.organization) vcard += `ORG:${data.organization}\n`;
     if (data.title) vcard += `TITLE:${data.title}\n`;
-    if (data.email) vcard += `EMAIL;TYPE=INTERNET:${data.email || ''}\n`;
-    if (data.phone) vcard += `TEL;TYPE=VOICE:${data.phone || ''}\n`;
+    if (data.email) vcard += `EMAIL;TYPE=WORK,INTERNET:${data.email || ''}\n`;
+    if (data.phone) vcard += `TEL;TYPE=WORK,VOICE:${data.phone || ''}\n`;
     if (data.mobile) vcard += `TEL;TYPE=CELL,VOICE:${data.mobile || ''}\n`;
     if (data.fax) vcard += `TEL;TYPE=FAX:${data.fax || ''}\n`;
     if (data.website) vcard += `URL:${data.website}\n`;

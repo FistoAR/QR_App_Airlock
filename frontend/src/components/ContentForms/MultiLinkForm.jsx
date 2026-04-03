@@ -55,8 +55,8 @@ const MultiLinkForm = () => {
             <label className={labelClass}>Avatar URL</label>
             <input
               {...register('content.avatar')}
-              type="url"
-              placeholder="https://example.com/avatar.jpg"
+              type="text"
+              placeholder="e.g. www.example.com/avatar.jpg"
               className={inputClass}
             />
           </div>
@@ -128,8 +128,8 @@ const MultiLinkForm = () => {
                     <div>
                       <input
                         {...register(`content.links.${index}.url`, { required: true })}
-                        type="url"
-                        placeholder="https://example.com"
+                        type="text"
+                        placeholder="e.g. www.fist-o.com"
                         className={inputClass}
                       />
                     </div>
@@ -219,8 +219,8 @@ const MultiLinkForm = () => {
                   </div>
                   <input
                     {...register(`content.socialLinks.${index}.url`, { required: true })}
-                    type="url"
-                    placeholder={`Your ${platform?.label} URL`}
+                    type="text"
+                    placeholder={`e.g. www.linkedin.com/in/username`}
                     className={`flex-1 ${inputClass}`}
                   />
                   <button

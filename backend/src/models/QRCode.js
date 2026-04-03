@@ -69,9 +69,9 @@ const qrCodeSchema = new mongoose.Schema({
 
     margin: {
       type: Number,
-      default: 4,
+      default: 0,
       min: 0,
-      max: 10
+      max: 20
     },
     logo: {
       url: String,

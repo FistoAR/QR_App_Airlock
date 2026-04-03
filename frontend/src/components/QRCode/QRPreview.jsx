@@ -8,7 +8,7 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
     backgroundColor = '#FFFFFF',
     errorCorrectionLevel = 'M',
     logo = {},
-    margin = 4,
+    margin = 0,
     dotStyle = 'square',
     cornerStyle = 'square',
     cornerDotStyle = 'square',
@@ -36,6 +36,7 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
     switch (style) {
       case 'dot': return 'dot';
       case 'extra-rounded': return 'extra-rounded';
+      case 'square': return 'square';
       default: return 'square';
     }
   };
@@ -45,6 +46,7 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
     switch (style) {
       case 'dot': return 'dot';
       case 'extra-rounded': return 'extra-rounded';
+      case 'square': return 'square';
       default: return 'square';
     }
   };
@@ -61,8 +63,8 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
       }
       if (data.organization) vcard += `ORG:${data.organization}\n`;
       if (data.title) vcard += `TITLE:${data.title}\n`;
-      if (data.email) vcard += `EMAIL;TYPE=INTERNET:${data.email}\n`;
-      if (data.phone) vcard += `TEL;TYPE=VOICE:${data.phone}\n`;
+      if (data.email) vcard += `EMAIL;TYPE=WORK,INTERNET:${data.email}\n`;
+      if (data.phone) vcard += `TEL;TYPE=WORK,VOICE:${data.phone}\n`;
       if (data.mobile) vcard += `TEL;TYPE=CELL,VOICE:${data.mobile}\n`;
       if (data.website) vcard += `URL:${data.website}\n`;
       if (data.linkedin) {
@@ -100,12 +102,12 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
   const options = useMemo(() => {
     // Determine the API base for the proxy
     let apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
-    
+
     // Construct the absolute logo URL for the proxy
     let sourceLogoUrl = '';
     if (logo?.url) {
-      const secureUrl = logo.url.startsWith('http://') 
-        ? logo.url.replace('http://', 'https://') 
+      const secureUrl = logo.url.startsWith('http://')
+        ? logo.url.replace('http://', 'https://')
         : logo.url;
 
       if (secureUrl.startsWith('data:') || secureUrl.startsWith('http')) {
@@ -118,25 +120,19 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
     }
 
     const finalImageUrl = sourceLogoUrl ? (
-      sourceLogoUrl.startsWith('data:') 
-        ? sourceLogoUrl 
+      sourceLogoUrl.startsWith('data:')
+        ? sourceLogoUrl
         : `${apiBase.replace(/\/$/, '')}/content/proxy?url=${encodeURIComponent(sourceLogoUrl)}`
     ) : '';
 
     return {
-      width: 1000,
-      height: 1000,
+      width: 512,
+      height: 512,
       type: 'svg',
       data: previewData,
       image: finalImageUrl,
       dotsOptions: { color: foregroundColor, type: getDotType(dotStyle) },
-      backgroundOptions: { 
-        // When frame has background, make QR transparent (no background fill)
-        // When no frame background, use QR's backgroundColor
-        color: (frame.style && frame.style !== 'none' && frame.backgroundColor) 
-          ? '#00000000' // Transparent - will be removed from SVG
-          : backgroundColor 
-      },
+      backgroundOptions: { color: backgroundColor },
       cornersSquareOptions: { type: getCornerSquareType(cornerStyle), color: foregroundColor },
       cornersDotOptions: { type: getCornerDotType(cornerDotStyle), color: foregroundColor },
       imageOptions: {
@@ -145,9 +141,9 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
         imageSize: logo?.size || 0.25
       },
       qrOptions: { errorCorrectionLevel: errorCorrectionLevel, typeNumber: 0 },
-      margin: 0,
+      margin: (margin || 0) * 10,
     };
-  }, [previewData, foregroundColor, backgroundColor, dotStyle, cornerStyle, cornerDotStyle, logo?.url, logo?.size, errorCorrectionLevel, frame.style, frame.backgroundColor]);
+  }, [previewData, foregroundColor, backgroundColor, margin, dotStyle, cornerStyle, cornerDotStyle, logo?.url, logo?.size, errorCorrectionLevel, frame.style, frame.backgroundColor]);
 
   useEffect(() => {
     if (!qrRef.current) return;
@@ -155,7 +151,7 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
     try {
       // If logo changed or first time, clear it to prevent blank state
       if (qrRef.current) qrRef.current.innerHTML = '';
-      
+
       qrCode.current = new QRCodeStyling(options);
       qrCode.current.append(qrRef.current);
     } catch (err) {
@@ -163,33 +159,7 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
     }
   }, [options]); // Re-create on any options change ensuring fresh render
 
-  // 3. Remove QR background rect when frame has background
-  useEffect(() => {
-    if (!qrRef.current) return;
-
-    const svg = qrRef.current?.querySelector('svg');
-    if (!svg) return;
-
-    // Find the background rect (usually the first rect in the SVG)
-    const rects = svg.querySelectorAll('rect');
-    let bgRect = null;
-
-    // The background rect is typically the first element with the backgroundColor
-    if (rects.length > 0) {
-      rects.forEach(rect => {
-        const fill = rect.getAttribute('fill');
-        // Check if this is the background rect (it should be full size or background color)
-        if (fill === backgroundColor || fill === '#00000000') {
-          bgRect = rect;
-        }
-      });
-    }
-
-    // Remove background if frame has background
-    if (frame.style && frame.style !== 'none' && frame.backgroundColor && bgRect) {
-      bgRect.remove();
-    }
-  }, [frame.style, frame.backgroundColor, backgroundColor]);
+  // 3. (Removed) Handled natively by backgroundOptions now
 
   // 4. Update logo styles and handle broken images
   useEffect(() => {
@@ -198,47 +168,44 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
     const updateLogoStyles = () => {
       const svg = qrRef.current?.querySelector('svg');
       const img = svg?.querySelector('image');
-      
+
+      if (!svg) return;
+
       if (img && logo?.url) {
         img.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-        
-        // Add error handling for broken images
+
         img.onerror = () => {
           console.warn('Logo image failed to load:', logo.url);
           img.style.opacity = '0.3';
         };
 
-        // Determine if we need to blend away the logo's white background
-        const hasCustomBg = logo?.backgroundColor 
-          && logo.backgroundColor !== '#FFFFFF' 
+        // Logo background logic...
+        const hasCustomBg = logo?.backgroundColor
+          && logo.backgroundColor !== '#FFFFFF'
           && logo.backgroundColor !== '#ffffff'
           && logo.backgroundColor !== 'transparent';
         const isTransparent = logo?.backgroundColor === 'transparent';
 
-        // Apply mix-blend-mode: multiply so white areas in the logo
-        // take on the background colour instead of staying white
         if (hasCustomBg) {
           img.setAttribute('style', 'mix-blend-mode: multiply;');
         } else {
           img.removeAttribute('style');
         }
-        
+
         if ((logo?.backgroundColor && !isTransparent) || logo?.borderColor) {
           let bbox = { x: 0, y: 0, width: 0, height: 0 };
-          try { 
-            // Only try if img is actually in DOM
-            if (img.ownerSVGElement) bbox = img.getBBox(); 
+          try {
+            if (img.ownerSVGElement) bbox = img.getBBox();
           } catch (e) {
             bbox = {
-              x: parseFloat(img.getAttribute('x')) || 400, // Reasonable defaults for 1000x1000
+              x: parseFloat(img.getAttribute('x')) || 400,
               y: parseFloat(img.getAttribute('y')) || 400,
               width: parseFloat(img.getAttribute('width')) || 200,
               height: parseFloat(img.getAttribute('height')) || 200
             };
           }
-          
+
           const { x, y, width: w, height: h } = bbox;
-          
           if (w > 0 && h > 0) {
             let bgRect = svg.querySelector('#logo-preview-bg');
             if (!bgRect) {
@@ -246,16 +213,16 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
               bgRect.setAttribute('id', 'logo-preview-bg');
               img.parentNode.insertBefore(bgRect, img);
             }
-            
-            const margin = w * 0.18;
-            bgRect.setAttribute('x', (x - margin/2).toString());
-            bgRect.setAttribute('y', (y - margin/2).toString());
-            bgRect.setAttribute('width', (w + margin).toString());
-            bgRect.setAttribute('height', (h + margin).toString());
+
+            const marginSize = w * 0.18;
+            bgRect.setAttribute('x', (x - marginSize / 2).toString());
+            bgRect.setAttribute('y', (y - marginSize / 2).toString());
+            bgRect.setAttribute('width', (w + marginSize).toString());
+            bgRect.setAttribute('height', (h + marginSize).toString());
             bgRect.setAttribute('fill', logo.backgroundColor || '#FFFFFF');
             bgRect.setAttribute('stroke', logo.borderColor || '#E2E8F0');
             bgRect.setAttribute('stroke-width', Math.max(2, w * 0.03).toString());
-            bgRect.setAttribute('rx', ((w + margin) * 0.15).toString());
+            bgRect.setAttribute('rx', ((w + marginSize) * 0.15).toString());
           }
         } else {
           svg.querySelector('#logo-preview-bg')?.remove();
@@ -265,14 +232,20 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
       }
     };
 
+    // Use MutationObserver for reliability - handles dynamic content insertion
+    const observer = new MutationObserver(updateLogoStyles);
+    observer.observe(qrRef.current, { childList: true, subtree: true });
+
+    // Initial runs
     const timer = setTimeout(updateLogoStyles, 100);
-    const timer2 = setTimeout(updateLogoStyles, 600); // Wait longer for logo to load
-    
+    const timer2 = setTimeout(updateLogoStyles, 600);
+
     return () => {
+      observer.disconnect();
       clearTimeout(timer);
       clearTimeout(timer2);
     };
-  }, [disabled, logo?.backgroundColor, logo?.borderColor, logo?.url, logo?.size, options]); // options dependency ensures re-run if QR code structure changes
+  }, [disabled, logo?.backgroundColor, logo?.borderColor, logo?.url, logo?.size, options]);
 
   return (
     <div className="relative flex flex-col items-center">
@@ -302,13 +275,13 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
       >
         {/* Banner Style: Top Bar */}
         {frame.style === 'banner' && (
-          <div 
+          <div
             className="w-full min-h-[2.5vw] z-10 flex items-center justify-center py-[0.5vw] px-[0.8vw] shrink-0 overflow-y-auto"
             style={{ backgroundColor: frame.borderColor || '#000000' }}
           >
             {frame.topText && (
-              <span 
-                className="text-center text-[0.7vw] font-black tracking-widest leading-[1.4] whitespace-pre-wrap break-words" 
+              <span
+                className="text-center text-[0.7vw] font-black tracking-widest leading-[1.4] whitespace-pre-wrap break-words"
                 style={{ color: frame.textColor || '#FFFFFF' }}
               >
                 {frame.topText}
@@ -317,18 +290,18 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
           </div>
         )}
 
-          <div className="flex-1 flex flex-col items-center justify-center w-full min-h-0 relative" style={{ 
-            padding: (frame.style && frame.style !== 'none') ? (frame.style === 'banner' ? '5%' : '6%') : '0',
-          }}>
-            {/* QR Code Container - Fixed aspect ratio to keep size consistent */}
-            <div
-              ref={qrRef}
-              className={`qr-code-wrapper transition-all duration-500 overflow-visible flex items-center justify-center w-full aspect-square ${disabled ? 'opacity-20 grayscale blur-[2px]' : 'opacity-100'}`}
-              style={{
-                maxWidth: '100%',
-                flexShrink: 0
-              }}
-            />
+        <div className="flex-1 flex flex-col items-center justify-center w-full min-h-0 relative" style={{
+          padding: (frame.style && frame.style !== 'none') ? (frame.style === 'banner' ? '5%' : '6%') : '0',
+        }}>
+          {/* QR Code Container - Fixed aspect ratio to keep size consistent */}
+          <div
+            ref={qrRef}
+            className={`qr-code-wrapper transition-all duration-500 overflow-visible flex items-center justify-center w-full aspect-square ${disabled ? 'opacity-20 grayscale blur-[2px]' : 'opacity-100'}`}
+            style={{
+              maxWidth: '100%',
+              flexShrink: 0
+            }}
+          />
 
           {/* Simple/Rounded Frame Bottom Text */}
           {frame.style && frame.style !== 'none' && frame.style !== 'banner' && frame.text && (
@@ -344,30 +317,30 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
               <span className="break-words w-full px-[0.5vw] whitespace-pre-wrap">{frame.text}</span>
             </div>
           )}
-          
+
           {/* Overlay for selection moved inside content area */}
           {disabled && (
             <div className="absolute inset-0 bg-white/95 backdrop-blur-md z-20 flex items-center justify-center p-[2vw] text-center transition-all duration-300">
-                <div className="space-y-[0.75vw] scale-90">
-                    <div className="w-[4.5vw] h-[4.5vw] bg-slate-100 rounded-full mx-auto flex items-center justify-center border border-slate-200">
-                        <FiArrowRight className="text-slate-700 text-[1.8vw] animate-pulse" />
-                    </div>
-                    <p className="text-[1.1vw] font-black text-slate-800 uppercase tracking-[0.2em]">Awaiting Selection</p>
-                    <p className="text-[0.8vw] text-slate-500 max-w-[15vw] mx-auto font-medium line-clamp-2">Select a QR type to begin</p>
+              <div className="space-y-[0.75vw] scale-90">
+                <div className="w-[4.5vw] h-[4.5vw] bg-slate-100 rounded-full mx-auto flex items-center justify-center border border-slate-200">
+                  <FiArrowRight className="text-slate-700 text-[1.8vw] animate-pulse" />
                 </div>
+                <p className="text-[1.1vw] font-black text-slate-800 uppercase tracking-[0.2em]">Awaiting Selection</p>
+                <p className="text-[0.8vw] text-slate-500 max-w-[15vw] mx-auto font-medium line-clamp-2">Select a QR type to begin</p>
+              </div>
             </div>
           )}
         </div>
 
         {/* Banner Style: Bottom Bar */}
         {frame.style === 'banner' && (
-          <div 
+          <div
             className="w-full min-h-[2.5vw] z-10 flex items-center justify-center py-[0.5vw] px-[0.8vw] shrink-0 overflow-y-auto"
             style={{ backgroundColor: frame.borderColor || '#000000' }}
           >
             {(frame.bottomText || frame.text) && (
-              <span 
-                className="text-center text-[0.7vw] font-black tracking-widest leading-[1.4] whitespace-pre-wrap break-words" 
+              <span
+                className="text-center text-[0.7vw] font-black tracking-widest leading-[1.4] whitespace-pre-wrap break-words"
                 style={{ color: frame.textColor || '#FFFFFF' }}
               >
                 {frame.bottomText || frame.text}
@@ -383,6 +356,11 @@ const QRPreview = ({ customization = {}, content = {}, type = 'url', disabled = 
           width: 100% !important;
           height: 100% !important;
           display: block;
+          shape-rendering: crispEdges;
+          image-rendering: -moz-crisp-edges;
+          image-rendering: -webkit-optimize-contrast;
+          image-rendering: crisp-edges;
+          image-rendering: pixelated;
         }
       `}} />
     </div>

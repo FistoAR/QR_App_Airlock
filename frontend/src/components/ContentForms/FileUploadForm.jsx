@@ -43,6 +43,7 @@ const FileUploadForm = ({ type }) => {
 
       setValue('content', {
         url: data.url,
+        path: data.path, // Added path for backend deletion tracking
         publicId: data.publicId,
         fileName: data.fileName,
         fileSize: data.fileSize,

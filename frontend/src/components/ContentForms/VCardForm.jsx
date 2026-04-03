@@ -131,8 +131,8 @@ const VCardForm = () => {
             </label>
             <input
               {...register('content.website')}
-              type="url"
-              placeholder="https://www.example.com"
+              type="text"
+              placeholder="e.g. www.fist-o.com"
               className={inputClass}
             />
           </div>
@@ -143,8 +143,8 @@ const VCardForm = () => {
             </label>
             <input
               {...register('content.linkedin')}
-              type="url"
-              placeholder="linkedin.com/in/username"
+              type="text"
+              placeholder="e.g. linkedin.com/in/username"
               className={inputClass}
             />
           </div>

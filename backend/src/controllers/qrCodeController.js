@@ -2,6 +2,7 @@ import QRCode from '../models/QRCode.js';
 import Content from '../models/Content.js';
 import qrGeneratorService from '../services/qrGeneratorService.js';
 import fileService from '../services/fileService.js';
+import { ensureProtocol } from '../utils/helpers.js';
 
 /**
  * @desc    Create new QR code
@@ -33,6 +34,29 @@ export const createQRCode = async (req, res, next) => {
       });
     }
 
+    // Process content to ensure protocols for URLs/links
+    let processedContent = { ...content };
+    if (type === 'url' && processedContent.target) {
+      processedContent.target = ensureProtocol(processedContent.target);
+    } else if (type === 'vcard' && processedContent) {
+      if (processedContent.website) processedContent.website = ensureProtocol(processedContent.website);
+      if (processedContent.linkedin) processedContent.linkedin = ensureProtocol(processedContent.linkedin);
+    } else if (type === 'multilink' && processedContent) {
+      if (processedContent.avatar) processedContent.avatar = ensureProtocol(processedContent.avatar);
+      if (Array.isArray(processedContent.links)) {
+        processedContent.links = processedContent.links.map(link => ({
+          ...link,
+          url: ensureProtocol(link.url)
+        }));
+      }
+      if (Array.isArray(processedContent.socialLinks)) {
+        processedContent.socialLinks = processedContent.socialLinks.map(social => ({
+          ...social,
+          url: ensureProtocol(social.url)
+        }));
+      }
+    }
+
     // Create QR code record
     const qrCode = await QRCode.create({
       user: req.user.id,
@@ -59,7 +83,7 @@ export const createQRCode = async (req, res, next) => {
     const contentData = {
       qrCode: qrCode._id,
       type,
-      [type]: content
+      [type]: processedContent
     };
 
     console.log('Content Data being saved:', JSON.stringify(contentData, null, 2));
@@ -70,7 +94,7 @@ export const createQRCode = async (req, res, next) => {
     if (isDynamic) {
       qrContent = `${process.env.BASE_URL}/scan/${qrCode.code}`;
     } else {
-      qrContent = qrGeneratorService.generateContentString(type, content);
+      qrContent = qrGeneratorService.generateContentString(type, processedContent);
     }
 
     console.log('QR Content to encode:', qrContent);
@@ -225,6 +249,25 @@ export const updateQRCode = async (req, res, next) => {
 
     // If customization changed, regenerate QR image
     if (customization) {
+      // 1. Check for logo change to delete old logo file if replaced
+      const oldLogoPath = qrCode.customization?.logo?.path;
+      const newLogoPath = customization.logo?.path;
+
+      if (oldLogoPath && newLogoPath && oldLogoPath !== newLogoPath) {
+        console.log(`[CLEANUP] Checking if old logo is orphaned: ${oldLogoPath}`);
+        const otherRef = await QRCode.findOne({ 'customization.logo.path': oldLogoPath });
+        if (!otherRef) {
+          try {
+            await fileService.deleteFile(oldLogoPath);
+            console.log(`[CLEANUP] SUCCESS: Deleted orphaned logo file`);
+          } catch (e) {
+            console.error(`[CLEANUP] ERROR: Failed to delete logo file`, e);
+          }
+        } else {
+          console.log(`[CLEANUP] SKIPPED: Logo still used by QR: ${otherRef._id}`);
+        }
+      }
+
       qrCode.customization = { 
         ...qrCode.customization.toObject ? qrCode.customization.toObject() : qrCode.customization, 
         ...customization 
@@ -243,9 +286,13 @@ export const updateQRCode = async (req, res, next) => {
 
       const qrBuffer = await qrGeneratorService.generateQR(qrContent, qrCode.customization);
 
-      // Delete old QR image
+      // 2. Delete old QR image
       if (qrCode.qrImagePath) {
-        await fileService.deleteFile(qrCode.qrImagePath);
+        try {
+          await fileService.deleteFile(qrCode.qrImagePath);
+        } catch (e) {
+          console.error(`Failed to delete old QR image: ${qrCode.qrImagePath}`, e);
+        }
       }
 
       // Save new QR image
@@ -258,9 +305,62 @@ export const updateQRCode = async (req, res, next) => {
 
     // Update content if provided
     if (content) {
+      // 3. Delete old content files if replaced (for file/document/media types)
+      if (['file', 'document', 'media'].includes(qrCode.type)) {
+        const oldContent = await Content.findOne({ qrCode: qrCode._id });
+        const oldFilePath = oldContent?.[qrCode.type]?.path;
+        const newFilePath = content.path;
+
+        if (oldFilePath && newFilePath && oldFilePath !== newFilePath) {
+          // Safety: only delete if NO other QR code uses this old file
+          const otherRef = await Content.findOne({ 
+            qrCode: { $ne: qrCode._id },
+            $or: [
+              { 'file.path': oldFilePath },
+              { 'document.path': oldFilePath },
+              { 'media.path': oldFilePath }
+            ]
+          });
+
+          if (!otherRef) {
+            try {
+              console.log(`[UPDATE-CLEANUP] Deleting replaced orphaned file: ${oldFilePath}`);
+              await fileService.deleteFile(oldFilePath);
+            } catch (e) {
+              console.error(`[UPDATE-CLEANUP] Failed to delete old content file: ${oldFilePath}`, e);
+            }
+          } else {
+            console.log(`[UPDATE-CLEANUP] SKIPPED: Old file still shared with QR: ${otherRef.qrCode}`);
+          }
+        }
+      }
+
+      // Process content to ensure protocols for URLs/links
+      let processedContent = { ...content };
+      if (qrCode.type === 'url' && processedContent.target) {
+        processedContent.target = ensureProtocol(processedContent.target);
+      } else if (qrCode.type === 'vcard' && processedContent) {
+        if (processedContent.website) processedContent.website = ensureProtocol(processedContent.website);
+        if (processedContent.linkedin) processedContent.linkedin = ensureProtocol(processedContent.linkedin);
+      } else if (qrCode.type === 'multilink' && processedContent) {
+        if (processedContent.avatar) processedContent.avatar = ensureProtocol(processedContent.avatar);
+        if (Array.isArray(processedContent.links)) {
+          processedContent.links = processedContent.links.map(link => ({
+            ...link,
+            url: ensureProtocol(link.url)
+          }));
+        }
+        if (Array.isArray(processedContent.socialLinks)) {
+          processedContent.socialLinks = processedContent.socialLinks.map(social => ({
+            ...social,
+            url: ensureProtocol(social.url)
+          }));
+        }
+      }
+
       await Content.findOneAndUpdate(
         { qrCode: qrCode._id },
-        { [qrCode.type]: content },
+        { [qrCode.type]: processedContent },
         { new: true }
       );
     }
@@ -294,21 +394,86 @@ export const deleteQRCode = async (req, res, next) => {
       });
     }
 
-    // Delete QR image file
+    // 1. Delete QR image file
     if (qrCode.qrImagePath) {
       await fileService.deleteFile(qrCode.qrImagePath);
     }
 
-    // Delete associated content and files
-    const content = await Content.findOne({ qrCode: qrCode._id });
-    if (content && content.file && content.file.path) {
-      await fileService.deleteFile(content.file.path);
+    // 2. Delete logo file if it exists and is NOT used by other QR codes
+    if (qrCode.customization?.logo?.path) {
+      const logoPath = qrCode.customization.logo.path;
+      console.log(`[DELETE] Checking logo references for: ${logoPath}`);
+      
+      const otherUser = await QRCode.findOne({ 
+        _id: { $ne: qrCode._id },
+        'customization.logo.path': logoPath 
+      });
+
+      if (!otherUser) {
+        console.log(`[DELETE] No other references found. Deleting logo...`);
+        try {
+          await fileService.deleteFile(logoPath);
+        } catch (e) {
+          console.error(`[DELETE] Failed to delete logo: ${logoPath}`, e);
+        }
+      } else {
+        console.log(`[DELETE] SKIPPED: Logo is shared with QR: ${otherUser._id}`);
+      }
     }
 
-    // Delete content record
-    await Content.deleteOne({ qrCode: qrCode._id });
+    // 3. Delete associated content and files
+    const content = await Content.findOne({ qrCode: qrCode._id });
+    if (content) {
+      // Find file path based on QR type or fallback to checking all potential fields
+      const type = qrCode.type;
+      let filePath = content[type]?.path;
+      const fileUrl = content[type]?.url;
 
-    // Delete QR code record
+      // Fallback: If path is missing but URL exists, try to infer path from URL
+      if (!filePath && fileUrl) {
+        console.log(`[RESOURCE-CLEANUP] Path missing, attempting to infer from URL: ${fileUrl}`);
+        const uploadMatch = fileUrl.match(/\/uploads\/(.+)$/);
+        if (uploadMatch) {
+          filePath = uploadMatch[1];
+        }
+      }
+
+      // Final Check: Look at all resource-heavy fields just in case
+      const potentialFiles = [filePath];
+      if (!filePath) {
+        ['media', 'document', 'file'].forEach(field => {
+          if (content[field]?.path) potentialFiles.push(content[field].path);
+        });
+      }
+      
+      for (const p of [...new Set(potentialFiles)].filter(Boolean)) {
+        // Reference check for shared content files
+        const otherFileRef = await Content.findOne({ 
+          qrCode: { $ne: qrCode._id },
+          $or: [
+            { 'file.path': p },
+            { 'document.path': p },
+            { 'media.path': p }
+          ]
+        });
+
+        if (!otherFileRef) {
+          try {
+            console.log(`[RESOURCE-CLEANUP] Deleting orphaned file: ${p}`);
+            await fileService.deleteFile(p);
+          } catch (e) {
+            console.error(`[RESOURCE-CLEANUP] Failed to delete file: ${p}`, e);
+          }
+        } else {
+          console.log(`[RESOURCE-CLEANUP] SKIPPED: File used by QR: ${otherFileRef.qrCode}`);
+        }
+      }
+      
+      // Delete content record
+      await Content.deleteOne({ qrCode: qrCode._id });
+    }
+
+    // 4. Delete QR code record
     await qrCode.deleteOne();
 
     res.status(200).json({
@@ -473,7 +638,7 @@ export const deleteManyQRCodes = async (req, res, next) => {
     });
 
     for (const qrCode of qrCodes) {
-      // Delete QR image file
+      // 1. Delete QR image file
       if (qrCode.qrImagePath) {
         try {
           await fileService.deleteFile(qrCode.qrImagePath);
@@ -482,20 +647,46 @@ export const deleteManyQRCodes = async (req, res, next) => {
         }
       }
 
-      // Delete associated content and files
-      const content = await Content.findOne({ qrCode: qrCode._id });
-      if (content && content.file && content.file.path) {
-        try {
-          await fileService.deleteFile(content.file.path);
-        } catch (e) {
-          console.error(`Failed to delete content file: ${content.file.path}`, e);
+      // 2. Delete logo file (if not shared)
+      if (qrCode.customization?.logo?.path) {
+        const logoPath = qrCode.customization.logo.path;
+        const otherRef = await QRCode.findOne({ 
+          _id: { $ne: qrCode._id },
+          'customization.logo.path': logoPath 
+        });
+
+        if (!otherRef) {
+          try {
+            await fileService.deleteFile(logoPath);
+          } catch (e) {
+            console.error(`Failed to delete logo during bulk: ${logoPath}`, e);
+          }
         }
       }
 
-      // Delete content record
-      await Content.deleteOne({ qrCode: qrCode._id });
+      // 3. Delete associated content and its files (if not shared)
+      const content = await Content.findOne({ qrCode: qrCode._id });
+      if (content) {
+        const filePath = content[qrCode.type]?.path;
+        if (filePath) {
+          const typeKey = `${qrCode.type}.path`;
+          const otherFileRef = await Content.findOne({ 
+            qrCode: { $ne: qrCode._id },
+            [typeKey]: filePath 
+          });
+
+          if (!otherFileRef) {
+            try {
+              await fileService.deleteFile(filePath);
+            } catch (e) {
+              console.error(`Bulk check failed to delete content file: ${filePath}`, e);
+            }
+          }
+        }
+        await Content.deleteOne({ qrCode: qrCode._id });
+      }
       
-      // Delete QR code record
+      // 4. Delete QR code record
       await qrCode.deleteOne();
     }
 

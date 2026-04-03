@@ -102,7 +102,7 @@ const QRCreator = () => {
         dotStyle: 'square',
         cornerStyle: 'square',
         errorCorrectionLevel: 'H',
-        margin: 4,
+        margin: 0,
         logo: { url: '', size: 0.25, backgroundColor: '#FFFFFF', borderColor: '#E2E8F0' },
         frame: { style: 'none', text: '', topText: '', bottomText: '', textColor: '#FFFFFF', borderColor: '#000000', backgroundColor: '#FFFFFF' },
       },

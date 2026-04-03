@@ -68,14 +68,14 @@ const ColorPickerPopover = ({
   const isActive = activeColorPicker === `${parentKey}-${colorKey}`;
 
   return (
-    <div className="relative">
+    <div className="relative" data-picker-container={`${parentKey}-${colorKey}`}>
       <label className="block text-[0.75vw] font-medium text-slate-600 mb-[0.3vw]">
         {label}
       </label>
       <div className="flex items-center gap-[0.5vw]">
         <button
           type="button"
-          data-picker-toggle={colorKey}
+          data-picker-toggle={`${parentKey}-${colorKey}`}
           onClick={() => setActiveColorPicker(isActive ? null : `${parentKey}-${colorKey}`)}
           className="w-[2.5vw] h-[2.5vw] rounded-[0.3vw] border-2 border-slate-200 shadow-sm cursor-pointer hover:border-slate-300 transition-colors"
           style={{ backgroundColor: currentColor }}
@@ -157,23 +157,32 @@ const QRCustomizer = () => {
   });
   const pickerRef = useRef(null);
 
-  // Close color picker on click outside
+  // Close color picker on click outside or Esc key
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (pickerRef.current && !pickerRef.current.contains(event.target)) {
-        // Prevent immediate re-opening if clicking a toggle button
-        if (!event.target.closest('button[data-picker-toggle]')) {
-          setActiveColorPicker(null);
-        }
+      // Check if we are clicking inside ANY picker container
+      const container = event.target.closest('[data-picker-container]');
+      const containerId = container?.getAttribute('data-picker-container');
+      
+      // If we clicked outside the active picker's container, close it
+      if (activeColorPicker && containerId !== activeColorPicker) {
+        setActiveColorPicker(null);
       }
     };
+
+    const handleEsc = (event) => {
+      if (event.key === 'Escape') setActiveColorPicker(null);
+    };
+
     if (activeColorPicker) {
       document.addEventListener('mousedown', handleClickOutside);
       document.addEventListener('touchstart', handleClickOutside);
+      document.addEventListener('keydown', handleEsc);
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('touchstart', handleClickOutside);
+      document.removeEventListener('keydown', handleEsc);
     };
   }, [activeColorPicker]);
 
@@ -193,12 +202,37 @@ const QRCustomizer = () => {
     });
   };
 
-  const deleteUploadedLogo = (id, logoUrl) => {
+  const deleteUploadedLogo = async (id, logoUrl) => {
+    // 1. Remove from local gallery state immediately for responsiveness
     setUploadedLogos(prev => {
       const updated = prev.filter(l => l.id !== id);
       localStorage.setItem('qr_app_uploaded_logos', JSON.stringify(updated));
       return updated;
     });
+
+    // 2. Physically delete from server
+    try {
+      // Extract relative path from URL (e.g., /uploads/logos/file.png -> logos/file.png)
+      let filePath = logoUrl;
+      const uploadMatch = logoUrl.match(/\/uploads\/(.+)$/);
+      if (uploadMatch) {
+        filePath = uploadMatch[1];
+      } else if (logoUrl.includes('://')) {
+        // If it's a full URL, try to get the path part after the domain
+        const urlParts = new URL(logoUrl);
+        const pathPart = urlParts.pathname;
+        const subMatch = pathPart.match(/\/uploads\/(.+)$/);
+        if (subMatch) filePath = subMatch[1];
+      }
+
+      if (filePath && !filePath.startsWith('http')) {
+        await contentAPI.deleteFile(filePath);
+        console.log('Logo deleted from server:', filePath);
+      }
+    } catch (error) {
+      console.error('Failed to delete logo file from server:', error);
+    }
+
     if (customization.logo?.url === logoUrl) {
       updateNestedCustomization('logo', 'url', '');
     }
@@ -600,13 +634,21 @@ const QRCustomizer = () => {
               key={style.id}
               type="button"
               onClick={() => {
+                const currentBg = customization.backgroundColor;
+                const isAlreadyTransparent = currentBg === 'transparent' || currentBg?.toLowerCase() === 'transparent';
+                
+                // If picking a frame and we have a solid bg, move that bg to the frame and make QR transparent
+                if (style.id !== 'none' && !isAlreadyTransparent) {
+                  updateNestedCustomization('frame', 'backgroundColor', currentBg);
+                  updateCustomization('backgroundColor', 'transparent');
+                }
+
                 updateNestedCustomization('frame', 'style', style.id);
+
                 // Auto-set smart default text color based on frame style
                 if (style.id === 'banner') {
-                  // Banner has dark bars — white text is readable
                   updateNestedCustomization('frame', 'textColor', '#FFFFFF');
                 } else if (style.id === 'simple' || style.id === 'rounded') {
-                  // Simple/Rounded have white background — black text is readable
                   updateNestedCustomization('frame', 'textColor', '#000000');
                 }
               }}

@@ -56,6 +56,7 @@ export const contentAPI = {
   }),
   get: (qrCodeId) => api.get(`/content/${qrCodeId}`),
   update: (qrCodeId, data) => api.put(`/content/${qrCodeId}`, data),
+  deleteFile: (filePath) => api.delete('/content/file', { data: { filePath } }),
 };
 
 // Analytics API
