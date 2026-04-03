@@ -25,10 +25,17 @@ class QRGeneratorService {
     } = customization;
 
     try {
-      // Check if frame has background - if yes, make QR background transparent
-      const hasFrameBackground = frame && frame.style !== 'none' && frame.backgroundColor;
-      const qrBgColor = hasFrameBackground ? '#FFFFFF' : backgroundColor; // Use white for transparent rendering
-      const shouldMakeQRTransparent = hasFrameBackground;
+      // Smart background handling for transparency
+      const hasFrameBackground = frame && frame.style !== 'none' && (frame.backgroundColor || frame.backgroundColor === 'transparent');
+      
+      // If we need transparency, we use a temporary bg color to remove.
+      // CRITICAL: If the dot color (foregroundColor) is white, we CANNOT use white as the removal color
+      // because we'll erase the dots too! We'll use a neon green fallback in that case.
+      const isDotsWhite = foregroundColor.toUpperCase() === '#FFFFFF' || foregroundColor.toUpperCase() === '#FFF';
+      const tempBgColor = isDotsWhite ? '#00FF00' : '#FFFFFF';
+      
+      const qrBgColor = hasFrameBackground ? tempBgColor : backgroundColor;
+      const shouldMakeQRTransparent = hasFrameBackground || backgroundColor === 'transparent';
 
       // Generate base QR code
       const qrOptions = {
@@ -52,10 +59,9 @@ class QRGeneratorService {
         qrBuffer = await QRCode.toBuffer(content, qrOptions);
       }
 
-      // Make QR background transparent if frame background exists
-      // (must happen BEFORE adding logo so logo's white bg is not erased)
+      // Make QR background transparent if needed
       if (shouldMakeQRTransparent) {
-        qrBuffer = await this.makeBackgroundTransparent(qrBuffer, qrBgColor);
+        qrBuffer = await this.makeBackgroundTransparent(qrBuffer, qrBgColor, 5); // Added small tolerance
       }
 
       // Add logo if provided (after transparency so its bg survives)
